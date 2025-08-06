@@ -1,0 +1,1 @@
+When you do [pos + i] it adds i bytes

@@ -1,0 +1,92 @@
+param int K = 32; // Bucket size
+param int b_sz = 4;  // Block size
+
+type pntr = u64;
+
+fn randombyte() -> reg u8 {
+    stack u8[1] buf;
+    reg u8 r;
+    buf = #randombytes(buf);
+    r = buf[0];
+    return r;
+}
+
+// Get a random number in [0, x)
+fn random(reg u64 x) -> reg u64 {
+  reg u8 a = 0;
+  a = randombyte();
+  reg u64 ans = (64u)(a);
+  ans = ans % x;
+  return ans;
+}
+
+/* Compute the amount of blocks that will be needed for storing n elements */
+fn calcNBlocks(reg u64 n) -> reg u64 {
+  reg u64 N = (64u)(b_sz);
+  N = N + n - 1;
+  reg u64 b_sz2 = (64u)(b_sz);
+  N = N / b_sz2;
+  N = N;
+  return N;
+}
+
+/* Get memory address of the start of node i */
+fn getNode(reg pntr oram, reg pntr i) -> reg pntr {
+  reg pntr ans = oram + i * K * (2 + b_sz);
+  return ans;
+}
+
+/* Get memory address of the start of node corresponding to leaf i */
+fn getLeaf(reg u64 n, reg pntr oram, reg u64 i) -> reg pntr {
+  reg u64 N = calcNBlocks(n);
+  N = N;
+  i += N;
+  reg pntr ans = getNode(oram, i);
+  return ans;
+}
+
+/* Add {i, pos, vals} to node, assuming that there is a free bucket */
+fn addToNode(reg pntr node, reg u64 i, reg u64 pos, reg u64[K] vals) {
+
+}
+
+
+/*
+Initialize a one level ORAM with a capacity of n
+pos and oram have to be pointers to arrays of size (n + b_sz - 1) / b_sz and 2 * ((n + b_sz - 1) / b_sz) * K * (2 + b_sz)
+*/
+export
+fn init(reg u64 n, reg pntr pos, reg pntr oram) {
+  n = n; pos = pos; oram = oram;
+  reg u64 N = calcNBlocks(n);
+  reg u64 N2 = N * 2;
+
+  reg u64 j = 0;
+  while (j < N2) {
+    reg u64 jx = j * (2 + b_sz);
+    [pos + jx * 8] = N;
+    j += 1;
+  }
+
+  reg u64 i = 0;
+  while (i <= N) {
+    reg u64 x = 0;
+    x = random(N);
+    [pos + i * 8] = x;
+
+
+
+    i += 1;
+  }
+
+}
+
+
+
+/* export
+fn read(reg u64 pos, reg u64 oram) -> reg u64 {
+  reg u64 ans = 0;
+
+  return ans;
+}
+ */
