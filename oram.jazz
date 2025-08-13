@@ -55,23 +55,27 @@ fn addToNode(reg u64 N, reg pntr node, reg u64 i, reg u64 pos, stack u64[K] vals
   reg u8 cond;
   reg bool b_cond;
   while {
-    b_cond = j < b_sz;
+    b_cond = j >= b_sz;
     cond = #SETcc(b_cond);
-    cond = cond & flag;
-  } (cond != 0) {
-    reg pntr pi = j * (2 + b_sz);
+    cond = cond | flag;
+  } (cond == 0) {
+    reg pntr pi = j * (2 + b_sz); // index of element j of the node
 
     reg u64 this_i = [node + pi * 8];
-    if (this_i != N) {
+    if (this_i == N) {
       [node + pi * 8] = i;
       [node + (pi + 1) * 8] = pos;
       reg u64 p_this_vals = node + (pi + 2) * 8;
       reg u64 k = 0;
       while (k < K) {
         [p_this_vals + k * 8] = vals[k];
+
+        k = k + 1;
       }
       flag = 1;
     }
+
+    j = j + 1;
   }
 }
 
@@ -81,7 +85,7 @@ Initialize a one level ORAM with a capacity of n
 Pos and oram have to be pointers to arrays of size (n + b_sz - 1) / b_sz and 2 * ((n + b_sz - 1) / b_sz) * K * (2 + b_sz)
 */
 export
-fn init(reg u64 n, reg pntr Pos, reg pntr oram) {
+fn initORAM(reg u64 n, reg pntr Pos, reg pntr oram) {
   n = n; Pos = Pos; oram = oram;
   reg u64 N = calcNBlocks(n);
   reg u64 N2K = N * 2;
@@ -95,7 +99,7 @@ fn init(reg u64 n, reg pntr Pos, reg pntr oram) {
   }
 
   reg u64 i = 0;
-  while (i <= N) {
+  while (i < N) {
     reg u64 pos = 0;
     pos = random(N);
     [Pos + i * 8] = pos;
@@ -111,13 +115,3 @@ fn init(reg u64 n, reg pntr Pos, reg pntr oram) {
   }
 
 }
-
-
-
-/* export
-fn read(reg u64 pos, reg u64 oram) -> reg u64 {
-  reg u64 ans = 0;
-
-  return ans;
-}
- */

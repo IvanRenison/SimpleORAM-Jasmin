@@ -1,2 +1,3 @@
 When you do [pos + i] it adds i bytes
 There are no return in the middle of the function, no breaks and no gotos
+How to debug

@@ -43,7 +43,7 @@ bool checkInvariant(ull n, ull* Pos, ull* oram_) {
   Node* oram = (Node*)oram_;
 
 
-  vector<bool> blocks(N, false); // Al block should be exactly once somewhere;
+  vector<bool> blocks(N, false); // All blocks should be exactly once somewhere
   for (ull j = 1; j < 2 * N; j++) {
     Node b = oram[j];
     for (ull k = 0; k < K; k++) {
