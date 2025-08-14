@@ -54,10 +54,10 @@ bool checkInvariant(ull n, ull* Pos, ull* oram_) {
         }
         blocks[i] = true;
 
-        if (!(N <= pos && pos < 2 * N)) {
+        if (!(pos < N)) {
           return false;
         }
-        if (!isDesOf(pos, j)) {
+        if (!isDesOf(pos + N, j)) {
           return false;
         }
 
@@ -83,13 +83,16 @@ bool checkInvariant(ull n, ull* Pos, ull* oram_) {
 
 int main() {
 
-  ull n = 4;
-  Node* oram = new Node[2 * calcNBlocks(n)];
-  ull* oram_ = (ull*)oram;
-  ull* Pos = new ull[calcNBlocks(n)];
+  for (ull n = 1; n < 10000; n++) {
+    //ull n = 64;
+    cerr << n << endl;
+    Node* oram = new Node[2 * calcNBlocks(n)];
+    ull* oram_ = (ull*)oram;
+    ull* Pos = new ull[calcNBlocks(n)];
 
-  initORAM(n, Pos, oram_);
-  assert(checkInvariant(n, Pos, oram_));
+    initORAM(n, Pos, oram_);
+    assert(checkInvariant(n, Pos, oram_));
+  }
 }
 
 
