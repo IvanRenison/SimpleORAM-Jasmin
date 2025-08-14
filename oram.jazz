@@ -4,11 +4,11 @@ param int b_sz = 4;  // Block size
 type pntr = u64;
 
 fn randombyte() -> reg u8 {
-    stack u8[1] buf;
-    reg u8 r;
-    buf = #randombytes(buf);
-    r = buf[0];
-    return r;
+  stack u8[1] buf;
+  reg u8 r;
+  buf = #randombytes(buf);
+  r = buf[0];
+  return r;
 }
 
 // Get a random number in [0, x)
@@ -45,9 +45,8 @@ fn getLeaf(reg u64 n, reg pntr oram, reg u64 i) -> reg pntr {
   return ans;
 }
 
-/* Add {i, pos, vals} to node, assuming that there is a free bucket */
+/* Add {i, pos, vals} to node, assuming that there is a free node element */
 fn addToNode(reg u64 N, reg pntr node, reg u64 i, reg u64 pos, reg ptr u64[b_sz] vals) {
-  node = node;
 
   reg u64 k = 0;
   reg u8 flag = 0;
@@ -83,9 +82,7 @@ fn addToNode(reg u64 N, reg pntr node, reg u64 i, reg u64 pos, reg ptr u64[b_sz]
 Initialize a one level ORAM with a capacity of n
 Pos and oram have to be pointers to arrays of size (n + b_sz - 1) / b_sz and 2 * ((n + b_sz - 1) / b_sz) * K * (2 + b_sz)
 */
-export
 fn initORAM(reg u64 n, reg pntr Pos, reg pntr oram) {
-  n = n; Pos = Pos; oram = oram;
   reg u64 N = calcNBlocks(n);
   reg u64 N2K = N * 2;
   N2K *= K;
@@ -120,5 +117,11 @@ fn initORAM(reg u64 n, reg pntr Pos, reg pntr oram) {
 
     i += 1;
   }
-
 }
+
+export
+fn initORAM_export(reg u64 n, reg pntr Pos, reg pntr oram) {
+  n = n; Pos = Pos; oram = oram;
+  initORAM(n, Pos, oram);
+}
+

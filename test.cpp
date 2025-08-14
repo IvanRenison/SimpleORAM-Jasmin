@@ -3,11 +3,11 @@ using namespace std;
 typedef long long ll;
 typedef unsigned long long ull;
 
-const ull K = 32; // Block size
+const ull K = 32; // Bucket size
 const ull b_sz = 4; // Block size
 
 extern "C"
-void initORAM(ull n, ull* Pos, ull* oram);
+void initORAM_export(ull n, ull* Pos, ull* oram);
 
 struct NodeElem {
   ull i; // This node has the information of block i
@@ -15,7 +15,7 @@ struct NodeElem {
   array<ull, b_sz> v; // the actual content of the block i
 } __attribute__((packed));
 
-struct Node {
+struct Node { // This is a bucket
   array<NodeElem, K> elems;
 } __attribute__((packed));
 
@@ -90,7 +90,7 @@ int main() {
     ull* oram_ = (ull*)oram;
     ull* Pos = new ull[calcNBlocks(n)];
 
-    initORAM(n, Pos, oram_);
+    initORAM_export(n, Pos, oram_);
     assert(checkInvariant(n, Pos, oram_));
   }
 }
