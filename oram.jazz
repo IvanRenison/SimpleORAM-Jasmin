@@ -22,8 +22,8 @@ fn random(reg u64 x) -> reg u64 {
 
 /* Compute the amount of blocks that will be needed for storing n elements */
 fn calcNBlocks(reg u64 n) -> reg u64 {
-  reg u64 N = (64u)(b_sz);
-  N = N + n - 1;
+  reg u64 N = n;
+  N += (64u)(b_sz - 1);
   reg u64 b_sz2 = (64u)(b_sz);
   N = N / b_sz2;
   N = N;
