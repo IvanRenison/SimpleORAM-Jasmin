@@ -6,8 +6,8 @@ typedef unsigned long long ull;
 const ull K = 32; // Bucket size
 const ull b_sz = 4; // Block size
 
-extern "C"
-void initORAM_export(ull n, ull* Pos, ull* oram);
+extern "C" void initORAM_export(ull n, ull* Pos, ull* oram);
+extern "C" ull* fetch_export(ull a, ull* Pos, ull* oram, ull i);
 
 struct NodeElem {
   ull i; // This node has the information of block i
@@ -39,9 +39,7 @@ bool isDesOf(ull a, ull b) { // is b a descendent of a
 
 bool checkInvariant(ull n, ull* Pos, ull* oram_) {
   ull N = calcNBlocks(n);
-
   Node* oram = (Node*)oram_;
-
 
   vector<bool> blocks(N, false); // All blocks should be exactly once somewhere
   for (ull j = 1; j < 2 * N; j++) {
@@ -80,6 +78,38 @@ bool checkInvariant(ull n, ull* Pos, ull* oram_) {
 }
 
 
+void test_fetch(ull n, ull* Pos, ull* oram_) {
+  ull N = calcNBlocks(n);
+  Node* oram = (Node*)oram_;
+
+  if (N <= 500) {
+    for (ull i = 0; i < N; i++) {
+      ull* node_elem_ = fetch_export(n, Pos, oram_, i);
+      assert(node_elem_ != nullptr);
+
+      NodeElem* node_elem = (NodeElem*)node_elem_;
+
+      assert(node_elem->i == i);
+      assert(node_elem->pos < N);
+
+      assert(checkInvariant(n, Pos, oram_));
+    }
+  } else {
+    for (ull _ = 0; _ < 500; _++) {
+      ull i = rand() % N;
+      ull* node_elem_ = fetch_export(n, Pos, oram_, i);
+      assert(node_elem_ != nullptr);
+
+      NodeElem* node_elem = (NodeElem*)node_elem_;
+
+      assert(node_elem->i == i);
+      assert(node_elem->pos < N);
+
+      assert(checkInvariant(n, Pos, oram_));
+    }
+  }
+}
+
 
 int main() {
 
@@ -92,6 +122,10 @@ int main() {
 
     initORAM_export(n, Pos, oram_);
     assert(checkInvariant(n, Pos, oram_));
+    test_fetch(n, Pos, oram_);
+
+    delete[] oram;
+    delete[] Pos;
   }
 }
 
