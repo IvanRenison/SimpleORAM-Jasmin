@@ -26,12 +26,12 @@ bool isDesOf(ull a, ull b) { // is b a descendent of a
 struct ORAM1 {
   static constexpr ull b_sz = 2; // Block size
   static constexpr ull K = 32; // Bucket size
-  struct Node {
+  struct NodeElem {
     ull i; // This node has the information of block i
-    ull pos; // The leaf corresponding to the Node, or -1 to indicate invalid Node
+    ull pos; // The leaf corresponding to the NodeElem, or -1 to indicate invalid NodeElem
     array<ull, b_sz> v; // the actual content of the block i
 
-    Node() {
+    NodeElem() {
       i = -1;
       pos = -1;
       v = {0};
@@ -42,7 +42,7 @@ struct ORAM1 {
   ull N; // Amount of blocks (N = (n + b_sz - 1) / b_sz)
   vector<ull> Pos; // The leaf corresponding to each block
 
-  vector<array<Node, K>> tree;
+  vector<array<NodeElem, K>> tree;
 
   ORAM1(ull n) : n(n), N((n + b_sz - 1) / b_sz), Pos(N), tree(2 * N) {
     for (ull i = 0; i < N; i++) {
@@ -54,7 +54,7 @@ struct ORAM1 {
     set<ull> is;
     for (ull i = 1; i < 2 * N; i++) {
       for (ull k = 0; k < K; k++) {
-        Node node = tree[i][k];
+        NodeElem node = tree[i][k];
         if (node.i != -1) {
           assert(!is.count(node.i));
           assert(Pos[node.i] == node.pos);
@@ -64,7 +64,7 @@ struct ORAM1 {
     }
   }
 
-  static void addNode(array<Node, K>& nodes, Node node) {
+  static void addNode(array<NodeElem, K>& nodes, NodeElem node) {
     for (ull k = 0; k < K; k++) {
       assert(nodes[k].i != node.i);
       if (nodes[k].pos == -1) {
@@ -75,19 +75,19 @@ struct ORAM1 {
     assert(false);
   }
 
-  Node fetch(ull a) { // Get node corresponding to position a
+  NodeElem fetch(ull a) { // Get node elem corresponding to position a
     assert(a < n);
     ull i = a / b_sz;
     ull pos = Pos[i];
-    Node ans = Node();
+    NodeElem ans = NodeElem();
 
     ull p = pos + N;
     while (p > 0) {
-      array<Node, K> this_nodes = tree[p];
+      array<NodeElem, K> this_nodes = tree[p];
       for (ull k = 0; k < K; k++) {
         if (this_nodes[k].i == i) {
           ans = this_nodes[k];
-          this_nodes[k] = Node();
+          this_nodes[k] = NodeElem();
         }
       }
       tree[p] = this_nodes;
@@ -105,13 +105,13 @@ struct ORAM1 {
 
     pos += N;
 
-    vector<Node> toAdd;
+    vector<NodeElem> toAdd;
     ull l = 64 - __builtin_clzll(pos);
     assert(pos >> (l - 1) == 1);
     for (ull d = l; d--; ) {
-      array<Node, K> this_nodes = tree[pos >> d];
+      array<NodeElem, K> this_nodes = tree[pos >> d];
 
-      for (Node node : toAdd) {
+      for (NodeElem node : toAdd) {
         addNode(this_nodes, node);
       }
 
@@ -122,7 +122,7 @@ struct ORAM1 {
           if (this_nodes[k].i != -1) {
             if (isDesOf(pos >> (d - 1), this_nodes[k].pos + N)) {
               toAdd.push_back(this_nodes[k]);
-              this_nodes[k] = Node();
+              this_nodes[k] = NodeElem();
             }
           }
         }
@@ -136,7 +136,7 @@ struct ORAM1 {
     assert(a < n);
     ull i = a / b_sz;
 
-    Node node = fetch(a);
+    NodeElem node = fetch(a);
 
     ull ans = node.v[a % b_sz];
 
@@ -161,7 +161,7 @@ struct ORAM1 {
     assert(a < n);
     ull i = a / b_sz;
 
-    Node node = fetch(a);
+    NodeElem node = fetch(a);
 
     check();
 

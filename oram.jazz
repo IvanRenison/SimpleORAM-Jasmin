@@ -126,13 +126,12 @@ fn initORAM_export(reg u64 n, reg pntr Pos, reg pntr oram) {
 }
 
 /*
-  Get a pointer to node element corresponding to block i
+  Find node element corresponding to block i ans store it in res. Removes from original and returns original address
 */
-fn fetch(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i) -> reg pntr {
+fn fetch(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i, reg pntr res) -> reg pntr {
   reg u64 N = calcNBlocks(n);
 
   reg pntr ans = 0;
-
 
   reg u64 p = [Pos + i * 8];
   p += N;
@@ -149,6 +148,32 @@ fn fetch(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i) -> reg pntr {
       reg u64 this_i = [node + j * 8];
       if (this_i == i) {
         ans = node + j * 8;
+
+        reg u64 idx = 0;
+        while (idx < (2 + b_sz)) {
+          reg u64 unused = [res + idx * 8];
+          reg u64 v = [ans + idx * 8];
+          [res + idx * 8] = v;
+          if (idx == 1) {
+            [ans + idx * 8] = N;
+          } else {
+            [ans + idx * 8] = 0;
+          }
+
+          idx += 1;
+        }
+      } else {
+        reg u64 not_ans = node + j * 8;
+
+        reg u64 idx = 0;
+        while (idx < (2 + b_sz)) {
+          reg u64 in_res = [res + idx * 8];
+          reg u64 v = [not_ans + idx * 8];
+          [res + idx * 8] = in_res;
+          [not_ans + idx * 8] = v;
+
+          idx += 1;
+        }
       }
 
       k += 1;
@@ -161,11 +186,10 @@ fn fetch(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i) -> reg pntr {
 }
 
 export
-fn fetch_export(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i) -> reg pntr {
-  n = n; Pos = Pos; oram = oram; i = i;
-  reg pntr ans = fetch(n, Pos, oram, i);
+fn fetch_export(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i, reg pntr res) -> reg pntr {
+  n = n; Pos = Pos; oram = oram; i = i; res = res;
+  reg pntr ans = fetch(n, Pos, oram, i, res);
   ans = ans;
   return ans;
 }
-
 

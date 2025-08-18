@@ -7,7 +7,7 @@ const ull K = 32; // Bucket size
 const ull b_sz = 4; // Block size
 
 extern "C" void initORAM_export(ull n, ull* Pos, ull* oram);
-extern "C" ull* fetch_export(ull a, ull* Pos, ull* oram, ull i);
+extern "C" ull* fetch_export(ull a, ull* Pos, ull* oram, ull i, ull* res);
 
 struct NodeElem {
   ull i; // This node has the information of block i
@@ -82,31 +82,25 @@ void test_fetch(ull n, ull* Pos, ull* oram_) {
   ull N = calcNBlocks(n);
   Node* oram = (Node*)oram_;
 
-  if (N <= 500) {
-    for (ull i = 0; i < N; i++) {
-      ull* node_elem_ = fetch_export(n, Pos, oram_, i);
-      assert(node_elem_ != nullptr);
+  ull tests = min(N, 500ull);
 
-      NodeElem* node_elem = (NodeElem*)node_elem_;
+  for (ull i = 0; i < tests; i++) {
+    NodeElem res;
 
-      assert(node_elem->i == i);
-      assert(node_elem->pos < N);
+    ull* node_elem_ = fetch_export(n, Pos, oram_, i, (ull*)&res);
 
-      assert(checkInvariant(n, Pos, oram_));
-    }
-  } else {
-    for (ull _ = 0; _ < 500; _++) {
-      ull i = rand() % N;
-      ull* node_elem_ = fetch_export(n, Pos, oram_, i);
-      assert(node_elem_ != nullptr);
+    assert(node_elem_ != nullptr);
 
-      NodeElem* node_elem = (NodeElem*)node_elem_;
+    NodeElem* node_elem = (NodeElem*)node_elem_;
 
-      assert(node_elem->i == i);
-      assert(node_elem->pos < N);
+    assert(res.i == i);
+    assert(res.pos < N);
+    assert(node_elem->i == 0);
+    assert(node_elem->pos == N);
 
-      assert(checkInvariant(n, Pos, oram_));
-    }
+    *node_elem = res;
+
+    assert(checkInvariant(n, Pos, oram_));
   }
 }
 
