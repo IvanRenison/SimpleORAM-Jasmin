@@ -1,5 +1,29 @@
+param int n = 1000; // Size of virtual memory
 param int K = 32; // Bucket size
 param int b_sz = 4;  // Block size
+
+param int N = (n + b_sz - 1) / b_sz; // Amount of blocks
+
+
+/*
+Variable names convention:
+Pos  -> Positions array
+oram -> array used for the oram tree
+
+i    -> index in [0, N)
+j    -> index in [0, 2 * N)
+k    -> index in [0, K)
+ix   -> index in [0, 2 * N) // For indexing nodes in oram
+pi   -> index in [0, 2 * N * K * (2 + b_sz)) // For indexing numbers in oram
+ik   -> index in [0, K * (2 + b_sz)) // For indexing numbers in nodes
+
+vals -> array of stores values
+v    -> stored value
+x    -> a number
+
+
+*/
+
 
 type pntr = u64;
 
@@ -13,40 +37,24 @@ fn randombyte() -> reg u8 {
 
 // Get a random number in [0, x)
 fn random(reg u64 x) -> reg u64 {
-  reg u8 a = 0;
-  a = randombyte();
+  reg u8 a = randombyte();
   reg u64 ans = (64u)(a);
   ans = ans % x;
   return ans;
 }
 
-/* Compute the amount of blocks that will be needed for storing n elements */
-fn calcNBlocks(reg u64 n) -> reg u64 {
-  reg u64 N = n;
-  N += (64u)(b_sz - 1);
-  reg u64 b_sz2 = (64u)(b_sz);
-  N = N / b_sz2;
-  N = N;
-  return N;
-}
-
-/* Get memory address of the start of node i */
-fn getNode(reg pntr oram, reg pntr i) -> reg pntr {
-  reg pntr ans = oram + i * K * (2 + b_sz);
-  return ans;
-}
-
-/* Get memory address of the start of node corresponding to leaf i */
-fn getLeaf(reg u64 n, reg pntr oram, reg u64 i) -> reg pntr {
-  reg u64 N = calcNBlocks(n);
-  N = N;
-  i += N;
-  reg pntr ans = getNode(oram, i);
+// Returns the index of the most significant bit
+inline fn BSR(reg u64 x) -> reg u64 {
+  x = x;
+  reg u64 ans = #LZCNT_64(x);
+  reg u64 aux = 63;
+  ans = aux - ans;
+  ans = ans;
   return ans;
 }
 
 /* Add {i, pos, vals} to node, assuming that there is a free node element */
-fn addToNode(reg u64 N, reg pntr node, reg u64 i, reg u64 pos, reg ptr u64[b_sz] vals) {
+fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg u64 i, reg u64 pos, reg ptr u64[b_sz] vals) -> reg ptr u64[K * (2 + b_sz)] {
 
   reg u64 k = 0;
   reg u8 flag = 0;
@@ -57,16 +65,18 @@ fn addToNode(reg u64 N, reg pntr node, reg u64 i, reg u64 pos, reg ptr u64[b_sz]
     cond = #SETcc(b_cond);
     cond = cond | flag;
   } (cond == 0) {
-    reg pntr pi = k * (2 + b_sz); // index of element k of the node
+    reg u64 pk = k * (2 + b_sz); // start of element k of the node
 
-    reg u64 this_i = [node + pi * 8];
+    reg u64 this_i = node[pk];
     if (this_i == N) {
-      [node + pi * 8] = i;
-      [node + (pi + 1) * 8] = pos;
-      reg u64 p_this_vals = node + (pi + 2) * 8;
+      node[pk] = i;
+      node [pk + 1] = pos;
+      reg u64 p_this_vals = pk + 2;
       reg u64 j = 0;
       while (j < b_sz) {
-        [p_this_vals + j * 8] = vals[j];
+        reg u64 p_this_valsj = p_this_vals;
+        p_this_valsj += j;
+        node[p_this_valsj] = vals[j];
 
         j = j + 1;
       }
@@ -75,36 +85,34 @@ fn addToNode(reg u64 N, reg pntr node, reg u64 i, reg u64 pos, reg ptr u64[b_sz]
 
     k = k + 1;
   }
+
+  return node;
 }
 
-
 /*
-Initialize a one level ORAM with a capacity of n
-Pos and oram have to be pointers to arrays of size (n + b_sz - 1) / b_sz and 2 * ((n + b_sz - 1) / b_sz) * K * (2 + b_sz)
+Initialize a one level ORAM
 */
-fn initORAM(reg u64 n, reg pntr Pos, reg pntr oram) {
-  reg u64 N = calcNBlocks(n);
-  reg u64 N2K = N * 2;
-  N2K *= K;
+fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+  reg u64 N2K = N * 2 * K;
 
-  reg u64 j = 0;
-  while (j < N2K) {
-    reg u64 pi = j * (2 + b_sz);
-    [oram + pi * 8] = N;
-    j += 1;
+  reg u64 ix = 0;
+  while (ix < N2K) { // Mark all node elements as empty
+    reg u64 pi = ix * (2 + b_sz);
+    oram[pi] = N;
+    ix += 1;
   }
 
   reg u64 i = 0;
   while (i < N) {
-    reg u64 pos = 0;
-    pos = random(N);
-    [Pos + i * 8] = pos;
+    reg u64 N_reg = N;
+    reg u64 pos = random(N_reg);
+    Pos[i] = pos;
 
-    reg pntr node = oram;
-    reg u64 aux = pos;
-    aux += N;
-    aux *= K * (2 + b_sz) * 8;
-    node += aux;
+    reg u64 pi = N;
+    pi += pos;
+    pi *= K * (2 + b_sz);
+
+    reg ptr u64[K * (2 + b_sz)] node = oram[pi: K * (2 + b_sz)];
     stack u64[b_sz] vals_mem;
     reg u64 l = 0;
     while (l < b_sz) {
@@ -113,64 +121,75 @@ fn initORAM(reg u64 n, reg pntr Pos, reg pntr oram) {
     }
     reg ptr u64[b_sz] vals = vals_mem;
 
-    addToNode(N, node, i, pos, vals);
+    node = addToNode(node, i, pos, vals);
+    oram[pi: K * (2 + b_sz)] = node;
 
     i += 1;
   }
+
+  return Pos, oram;
 }
 
 export
-fn initORAM_export(reg u64 n, reg pntr Pos, reg pntr oram) {
-  n = n; Pos = Pos; oram = oram;
-  initORAM(n, Pos, oram);
+fn initORAM_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+  Pos = Pos; oram = oram;
+  Pos, oram = initORAM(Pos, oram);
+  return Pos, oram;
 }
 
 /*
-  Find node element corresponding to block i ans store it in res. Removes from original and returns original address
+  Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram
 */
-fn fetch(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i, reg pntr res) -> reg pntr {
-  reg u64 N = calcNBlocks(n);
+fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[K * (2 + b_sz)] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[K * (2 + b_sz)], reg u64 {
 
-  reg pntr ans = 0;
+  reg u64 ans = 0;
 
-  reg u64 p = [Pos + i * 8];
-  p += N;
+  reg u64 ix = Pos[i];
+  ix += N;
 
-  while (p > 0) {
-    reg u64 node = oram;
-    reg u64 aux = p;
+  while (ix > 0) {
+    /* reg u64 node = oram;
+    reg u64 aux = ix;
     aux *= K * (2 + b_sz) * 8;
-    node += aux;
+    node += aux; */
+
+    reg u64 pi = ix;
+    pi *= K * (2 + b_sz);
+
+    reg ptr u64[K * (2 + b_sz)] node = oram[pi: K * (2 + b_sz)];
 
     reg u64 k = 0;
     while (k < K) {
-      reg u64 j = k * (2 + b_sz);
-      reg u64 this_i = [node + j * 8];
+      reg u64 pk = k * (2 + b_sz);
+      reg u64 this_i = node[pk];
       if (this_i == i) {
-        ans = node + j * 8;
+        ans = pi;
+        ans += pk;
 
         reg u64 idx = 0;
         while (idx < (2 + b_sz)) {
-          reg u64 unused = [res + idx * 8];
-          reg u64 v = [ans + idx * 8];
-          [res + idx * 8] = v;
+          _ = res[idx];
+          reg u64 pk_add_idx = pk;
+          pk_add_idx += idx;
+          reg u64 v = node[pk_add_idx];
+          res[idx] = v;
           if (idx == 1) {
-            [ans + idx * 8] = N;
+            node[pk_add_idx] = N;
           } else {
-            [ans + idx * 8] = 0;
+            node[pk_add_idx] = 0;
           }
 
           idx += 1;
         }
       } else {
-        reg u64 not_ans = node + j * 8;
-
         reg u64 idx = 0;
         while (idx < (2 + b_sz)) {
-          reg u64 in_res = [res + idx * 8];
-          reg u64 v = [not_ans + idx * 8];
-          [res + idx * 8] = in_res;
-          [not_ans + idx * 8] = v;
+          reg u64 in_res = res[idx];
+          reg u64 pk_add_idx = pk;
+          pk_add_idx += idx;
+          reg u64 v = node[pk_add_idx];
+          res[idx] = in_res;
+          node[pk_add_idx] = v;
 
           idx += 1;
         }
@@ -179,17 +198,20 @@ fn fetch(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i, reg pntr res) -> reg
       k += 1;
     }
 
-    p >>= 1;
+    oram[pi: K * (2 + b_sz)] = node;
+
+    ix >>= 1;
   }
 
-  return ans;
+  return Pos, oram, res, ans;
 }
 
 export
-fn fetch_export(reg u64 n, reg pntr Pos, reg pntr oram, reg u64 i, reg pntr res) -> reg pntr {
-  n = n; Pos = Pos; oram = oram; i = i; res = res;
-  reg pntr ans = fetch(n, Pos, oram, i, res);
+fn fetch_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[K * (2 + b_sz)] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[K * (2 + b_sz)], reg u64 {
+  Pos = Pos; oram = oram; res = res; i = i;
+  reg u64 ans;
+  Pos, oram, res, ans = fetch(Pos, oram, res, i);
   ans = ans;
-  return ans;
+  return Pos, oram, res, ans;
 }
 

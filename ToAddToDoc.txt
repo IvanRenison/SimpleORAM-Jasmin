@@ -1,3 +1,4 @@
 When you do [pos + i] it adds i bytes
 There are no return in the middle of the function, no breaks and no gotos
-How to debug
+How to debug (I found this: https://zhengjieyuu.notion.site/Jasmin-Debug-23c9031d339680b685ffdba846976313)
+How to use direct assembler instructions
