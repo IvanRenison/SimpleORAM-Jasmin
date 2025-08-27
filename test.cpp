@@ -14,8 +14,8 @@ extern "C" pair<ull, ull> fetch_export(ull* Pos, ull* oram, ull* res, ull i);
 extern "C" void pushDown_export(ull* Pos, ull* oram);
 
 struct NodeElem {
-  ull i; // This node has the information of block i
-  ull pos; // The leaf corresponding to the NodeElem, or -1 to indicate invalid NodeElem
+  ull i; // This node has the information of block i, or N to indicate invalid NodeElem
+  ull pos; // The leaf corresponding to the NodeElem
   array<ull, b_sz> vals; // the actual content of the block i
 } __attribute__((packed));
 
@@ -36,6 +36,17 @@ bool isDesOf(ull a, ull b) { // is b a descendent of a
   return a == c;
 }
 
+void addToNode(Node& node, NodeElem elem) {
+  for (ull k = 0; k < K; k++) {
+    assert(node.elems[k].i != elem.i);
+    if (node.elems[k].i == N) {
+      node.elems[k] = elem;
+      return;
+    }
+  }
+  assert(false);
+}
+
 bool checkInvariant(ull* Pos, ull* oram_) {
   Node* oram = (Node*)oram_;
 
@@ -53,7 +64,7 @@ bool checkInvariant(ull* Pos, ull* oram_) {
         if (!(pos < N)) {
           return false;
         }
-        if (!isDesOf(pos + N, j)) {
+        if (!isDesOf(j, pos + N)) {
           return false;
         }
 
@@ -86,6 +97,9 @@ void test_fetch(ull* Pos, ull* oram_) {
     NodeElem res;
     auto [j, k] = fetch_export(Pos, oram_, (ull*)(&res), i);
     assert(oram[j].elems[k].i == N);
+    assert(res.i == i);
+    assert(res.pos < N);
+    assert(isDesOf(j, res.pos + N));
 
     oram[j].elems[k] = res;
 
@@ -93,10 +107,32 @@ void test_fetch(ull* Pos, ull* oram_) {
   }
 }
 
+void test_fetch_and_pushDown(ull* Pos, ull* oram_) {
+  Node* oram = (Node*)oram_;
+
+  for (ull it = 0; it < 100; it++) {
+    ull i = rand() % N;
+
+    NodeElem res;
+    auto [j, k] = fetch_export(Pos, oram_, (ull*)(&res), i);
+    assert(oram[j].elems[k].i == N);
+    assert(res.i == i);
+    assert(res.pos < N);
+    assert(isDesOf(j, res.pos + N));
+
+    addToNode(oram[1], res);
+
+    assert(checkInvariant(Pos, oram_));
+    pushDown_export(Pos, oram_);
+    assert(checkInvariant(Pos, oram_));
+  }
+}
+
+
 
 int main() {
 
-  for (ull tc = 1; tc < 10000; tc++) {
+  for (ull tc = 1; tc < 1000; tc++) {
     cerr << tc << endl;
     Node* oram = new Node[2 * N];
     ull* oram_ = (ull*)oram;
@@ -105,6 +141,7 @@ int main() {
     initORAM_export(Pos, oram_);
     assert(checkInvariant(Pos, oram_));
     test_fetch(Pos, oram_);
+    test_fetch_and_pushDown(Pos, oram_);
 
     delete[] oram;
     delete[] Pos;

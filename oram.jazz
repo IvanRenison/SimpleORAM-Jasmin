@@ -233,4 +233,112 @@ fn fetch_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, re
   return Pos, oram, res, ans_j, ans_k;
 }
 
+fn pushDown(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+  reg u64 N_reg = N;
+  reg u64 j = random(N_reg);
+
+  j += N;
+
+  reg u64 l = BSR(j);
+  l += 1;
+
+  stack u64[K * (2 + b_sz)] toAdd;
+  reg u64 k = 0;
+  while (k < K) {
+    reg u64 ik = k * (2 + b_sz);
+    toAdd[ik] = N;
+
+    k += 1;
+  }
+
+  while (l > 0) {
+    l = l - 1;
+
+    l = l;
+    () = #spill(l);
+
+    reg u64 ix = j;
+    ix = ix >> (l & 63);
+
+    reg u64 pi = ix * (K * (2 + b_sz));
+
+    reg ptr u64[K * (2 + b_sz)] node = oram[pi: K * (2 + b_sz)];
+
+    reg u64 k = 0;
+    while (k < K) { // Add elements in toAdd
+      reg u64 ik = k * (2 + b_sz);
+      reg u64 i = toAdd[ik];
+      if (i != N) {
+        reg u64 ik1 = ik;
+        ik1 += 1;
+        reg u64 pos = toAdd[ik1];
+
+        reg u64 ik2 = ik;
+        ik2 += 2;
+        reg ptr u64[b_sz] vals = toAdd[ik2: b_sz];
+        node = node;
+        node = addToNode(node, i, pos, vals);
+        node = node;
+
+        toAdd[ik] = N;
+      }
+
+      k += 1;
+    }
+
+    () = #unspill(l);
+
+    if (l != 0) {
+      reg u64 next_l = l;
+      next_l = next_l - 1;
+
+      reg u64 next_ix = j;
+      next_ix = next_ix >> (next_l & 63);
+
+      () = #spill(l);
+
+      k = 0;
+      while (k < K) { // Add elements to toAdd
+        reg u64 ik = k * (2 + b_sz);
+        () = #spill(k);
+
+        reg u64 this_i = node[ik];
+        if (this_i != N) {
+          reg u64 this_pos = node[ik + 1];
+          reg u64 this_pos_ix = this_pos;
+          this_pos_ix += N;
+
+          reg bool isDes = isDesOf(next_ix, this_pos_ix);
+
+
+          if (isDes) {
+            reg ptr u64[b_sz] vals = node[ik + 2: b_sz];
+
+            toAdd = addToNode(toAdd, this_i, this_pos, vals);
+            node[ik] = N;
+          }
+        }
+
+        () = #unspill(k);
+        k += 1;
+      }
+
+
+
+      () = #unspill(l);
+    }
+
+    oram[pi: K * (2 + b_sz)] = node;
+  }
+
+  return Pos, oram;
+}
+
+export
+fn pushDown_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+  Pos = Pos; oram = oram;
+  Pos, oram = pushDown(Pos, oram);
+  return Pos, oram;
+}
+
 
