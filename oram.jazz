@@ -53,6 +53,25 @@ inline fn BSR(reg u64 x) -> reg u64 {
   return ans;
 }
 
+inline fn isDesOf(reg u64 j0, reg u64 j1) -> reg bool { // Is j1 a descendent of j0
+  reg u64 ans = 0;
+
+  if (j0 < j1) {
+    reg u64 bitsj0 = BSR(j0);
+    reg u64 bitsj1 = BSR(j1);
+
+    reg u64 diff = bitsj1 - bitsj0;
+
+    reg u64 j2 = j1 >> (diff & 63);
+
+    reg u64 one = 1;
+    ans = one if j2 == j0;
+  }
+
+  reg bool b = ans == 1;
+  return b;
+}
+
 /* Add {i, pos, vals} to node, assuming that there is a free node element */
 fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg u64 i, reg u64 pos, reg ptr u64[b_sz] vals) -> reg ptr u64[K * (2 + b_sz)] {
 
@@ -106,6 +125,7 @@ fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg
   while (i < N) {
     reg u64 N_reg = N;
     reg u64 pos = random(N_reg);
+    pos = pos;
     Pos[i] = pos;
 
     reg u64 pi = N;
@@ -138,20 +158,17 @@ fn initORAM_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram)
 }
 
 /*
-  Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram
+  Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram in form (j, k)
 */
-fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[K * (2 + b_sz)] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[K * (2 + b_sz)], reg u64 {
+fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
 
-  reg u64 ans = 0;
+  reg u64 ans_j = 0;
+  reg u64 ans_k = 0;
 
   reg u64 ix = Pos[i];
   ix += N;
 
   while (ix > 0) {
-    /* reg u64 node = oram;
-    reg u64 aux = ix;
-    aux *= K * (2 + b_sz) * 8;
-    node += aux; */
 
     reg u64 pi = ix;
     pi *= K * (2 + b_sz);
@@ -163,8 +180,8 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
       reg u64 pk = k * (2 + b_sz);
       reg u64 this_i = node[pk];
       if (this_i == i) {
-        ans = pi;
-        ans += pk;
+        ans_j = ix;
+        ans_k = k;
 
         reg u64 idx = 0;
         while (idx < (2 + b_sz)) {
@@ -173,7 +190,7 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
           pk_add_idx += idx;
           reg u64 v = node[pk_add_idx];
           res[idx] = v;
-          if (idx == 1) {
+          if (idx == 0) {
             node[pk_add_idx] = N;
           } else {
             node[pk_add_idx] = 0;
@@ -203,15 +220,17 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
     ix >>= 1;
   }
 
-  return Pos, oram, res, ans;
+  return Pos, oram, res, ans_j, ans_k;
 }
 
 export
-fn fetch_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[K * (2 + b_sz)] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[K * (2 + b_sz)], reg u64 {
+fn fetch_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
   Pos = Pos; oram = oram; res = res; i = i;
-  reg u64 ans;
-  Pos, oram, res, ans = fetch(Pos, oram, res, i);
-  ans = ans;
-  return Pos, oram, res, ans;
+  reg u64 ans_j, ans_k;
+  Pos, oram, res, ans_j, ans_k = fetch(Pos, oram, res, i);
+  ans_j = ans_j;
+  ans_k = ans_k;
+  return Pos, oram, res, ans_j, ans_k;
 }
+
 
