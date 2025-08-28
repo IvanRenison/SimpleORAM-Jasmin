@@ -77,31 +77,48 @@ inline fn isDesOf(reg u64 j0, reg u64 j1) -> reg bool { // Is j1 a descendent of
 fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg u64 i, reg u64 pos, reg ptr u64[b_sz] vals) -> reg ptr u64[K * (2 + b_sz)] {
 
   reg u64 k = 0;
-  reg u8 flag = 0;
-  reg u8 cond;
-  reg bool b_cond;
-  while {
-    b_cond = k >= K;
-    cond = #SETcc(b_cond);
-    cond = cond | flag;
-  } (cond == 0) {
+  reg u8 flag = 1;
+  while (k < K) {
     reg u64 pk = k * (2 + b_sz); // start of element k of the node
+    reg ptr u64[2 + b_sz] nodeElem = node[pk: 2 + b_sz];
 
-    reg u64 this_i = node[pk];
-    if (this_i == N) {
-      node[pk] = i;
-      node [pk + 1] = pos;
-      reg u64 p_this_vals = pk + 2;
+    reg u64 this_i = nodeElem[0];
+
+    reg bool b_cond = this_i == N;
+    reg u8 cond = #SETcc(b_cond);
+    cond = cond & flag;
+
+    if (cond == 1) {
+      nodeElem[0] = i;
+
+      _ = nodeElem[1];
+      nodeElem[1] = pos;
+
       reg u64 j = 0;
       while (j < b_sz) {
-        reg u64 p_this_valsj = p_this_vals;
-        p_this_valsj += j;
-        node[p_this_valsj] = vals[j];
+        _ = nodeElem[2 + j];
+        nodeElem[2 + j] = vals[j];
 
         j = j + 1;
       }
-      flag = 1;
+
+      flag = 0;
+
+    } else {
+      nodeElem[0] = this_i;
+      reg u64 this_pos = nodeElem[1];
+      nodeElem[1] = this_pos;
+
+      reg u64 j = 0;
+      while (j < b_sz) {
+        reg u64 this_v = nodeElem[2 + j];
+        nodeElem[2 + j] = this_v;
+
+        j = j + 1;
+      }
     }
+
+    node[pk: 2 + b_sz] = nodeElem;
 
     k = k + 1;
   }
