@@ -130,6 +130,39 @@ fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem) -
   return node;
 }
 
+/* So the same memory access that addToNode with out doing nothing */
+fn false_addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem) -> reg ptr u64[K * (2 + b_sz)] {
+
+  _ = nodeElem[0];
+  _ = nodeElem[1];
+
+  reg u64 k = 0;
+  while (k < K) {
+    reg u64 pk = k * (2 + b_sz); // start of element k of the node
+    reg ptr u64[2 + b_sz] this_nodeElem = node[pk: 2 + b_sz];
+
+    reg u64 this_i = this_nodeElem[0];
+
+    this_nodeElem[0] = this_i;
+    reg u64 this_pos = this_nodeElem[1];
+    this_nodeElem[1] = this_pos;
+
+    reg u64 j = 0;
+    while (j < b_sz) {
+      reg u64 this_v = this_nodeElem[2 + j];
+      this_nodeElem[2 + j] = this_v;
+
+      j = j + 1;
+    }
+
+    node[pk: 2 + b_sz] = this_nodeElem;
+
+    k = k + 1;
+  }
+
+  return node;
+}
+
 /*
   Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram in form (j, k)
 */
@@ -252,6 +285,14 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
         node = node;
 
         toAdd[ik] = N;
+      } else {
+        reg ptr u64[2 + b_sz] this_nodeElem_toAdd = toAdd[ik: 2 + b_sz];
+
+        node = node;
+        node = false_addToNode(node, this_nodeElem_toAdd);
+        node = node;
+
+        toAdd[ik] = N;
       }
 
       k += 1;
@@ -274,20 +315,26 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
         () = #spill(k);
 
         reg u64 this_i = node[ik];
-        if (this_i != N) {
-          reg u64 this_pos = node[ik + 1];
-          reg u64 this_pos_ix = this_pos;
-          this_pos_ix += N;
+        reg u64 this_pos = node[ik + 1];
 
-          reg bool isDes = isDesOf(next_ix, this_pos_ix);
+        reg ptr u64[2 + b_sz] this_nodeElem = node[ik: 2 + b_sz];
 
+        reg u64 this_pos_ix = this_pos;
+        this_pos_ix += N;
 
-          if (isDes) {
-            reg ptr u64[2 + b_sz] this_nodeElem = node[ik: 2 + b_sz];
+        reg bool isDes_b = isDesOf(next_ix, this_pos_ix);
 
-            toAdd = addToNode(toAdd, this_nodeElem);
-            node[ik] = N;
-          }
+        reg u8 isDes = #SETcc(isDes_b);
+        reg bool cond_b = this_i != N;
+        reg u8 cond = #SETcc(cond_b);
+        cond = cond & isDes;
+
+        if (cond == 1) {
+          toAdd = addToNode(toAdd, this_nodeElem);
+          node[ik] = N;
+        } else {
+          toAdd = false_addToNode(toAdd, this_nodeElem);
+          node[ik] = this_i;
         }
 
         () = #unspill(k);
