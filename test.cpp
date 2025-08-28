@@ -1,9 +1,14 @@
+#define _GLIBCXX_DEBUG 1
+#define _GLIBCXX_DEBUG_PEDANTIC 1
+//#define _GLIBCXX_DEBUG_BACKTRACE 1
+#define _GLIBCXX_CONCEPT_CHECKS 1
+#define _GLIBCXX_SANITIZE_VECTOR 1
 #include <bits/stdc++.h>
 using namespace std;
 typedef int64_t ll;
 typedef uint64_t ull;
 
-const ull n = 1000; // Size of virtual memory
+const ull n = 200; // Size of virtual memory
 const ull K = 32; // Bucket size
 const ull b_sz = 4; // Block size
 
@@ -11,7 +16,9 @@ const ull N = (n + b_sz - 1) / b_sz; // Amount of blocks
 
 extern "C" void initORAM_export(ull* Pos, ull* oram);
 extern "C" pair<ull, ull> fetch_export(ull* Pos, ull* oram, ull* res, ull i);
-extern "C" void pushDown_export(ull* Pos, ull* oram);
+extern "C" void pushDown_export(ull* oram);
+extern "C" ull read_export(ull* Pos, ull* oram, ull in);
+extern "C" void write_export(ull* Pos, ull* oram, ull in, ull v);
 
 struct NodeElem {
   ull i; // This node has the information of block i, or N to indicate invalid NodeElem
@@ -47,12 +54,12 @@ void addToNode(Node& node, NodeElem elem) {
   assert(false);
 }
 
-bool checkInvariant(ull* Pos, ull* oram_) {
+bool checkInvariant(ull* Pos, ull* oram_, array<ull, n> real_mem) {
   Node* oram = (Node*)oram_;
 
   vector<bool> blocks(N, false); // All blocks should be exactly once somewhere
-  for (ull j = 1; j < 2 * N; j++) {
-    Node b = oram[j];
+  for (ull ix = 1; ix < 2 * N; ix++) {
+    Node b = oram[ix];
     for (ull k = 0; k < K; k++) {
       auto [i, pos, vals] = b.elems[k];
       if (i < N) {
@@ -64,13 +71,22 @@ bool checkInvariant(ull* Pos, ull* oram_) {
         if (!(pos < N)) {
           return false;
         }
-        if (!isDesOf(j, pos + N)) {
+        if (!isDesOf(ix, pos + N)) {
           return false;
         }
 
         if (Pos[i] != pos) {
           return false;
         }
+
+        for (ull j = 0; j < b_sz; j++) {
+          if (i * b_sz + j < n) {
+            assert(vals[j] == real_mem[i * b_sz + j]);
+          } else {
+            assert(vals[j] == 0);
+          }
+        }
+
       } else if (i != N) {
         return false;
       }
@@ -87,8 +103,7 @@ bool checkInvariant(ull* Pos, ull* oram_) {
 }
 
 
-
-void test_fetch(ull* Pos, ull* oram_) {
+void test_fetch(ull* Pos, ull* oram_, array<ull, n> real_mem) {
   Node* oram = (Node*)oram_;
 
   for (ull it = 0; it < 100; it++) {
@@ -103,11 +118,11 @@ void test_fetch(ull* Pos, ull* oram_) {
 
     oram[j].elems[k] = res;
 
-    assert(checkInvariant(Pos, oram_));
+    assert(checkInvariant(Pos, oram_, real_mem));
   }
 }
 
-void test_fetch_and_pushDown(ull* Pos, ull* oram_) {
+void test_fetch_and_pushDown(ull* Pos, ull* oram_, array<ull, n> real_mem) {
   Node* oram = (Node*)oram_;
 
   for (ull it = 0; it < 100; it++) {
@@ -122,9 +137,20 @@ void test_fetch_and_pushDown(ull* Pos, ull* oram_) {
 
     addToNode(oram[1], res);
 
-    assert(checkInvariant(Pos, oram_));
-    pushDown_export(Pos, oram_);
-    assert(checkInvariant(Pos, oram_));
+    assert(checkInvariant(Pos, oram_, real_mem));
+    pushDown_export(oram_);
+    assert(checkInvariant(Pos, oram_, real_mem));
+  }
+}
+
+void test_empty_read(ull* Pos, ull* oram_, array<ull, n> real_mem) {
+  for (ull it = 0; it < 100; it++) {
+    ull in = rand() % n;
+
+    ull val = read_export(Pos, oram_, in);
+    assert(val == 0);
+
+    assert(checkInvariant(Pos, oram_, real_mem));
   }
 }
 
@@ -132,20 +158,57 @@ void test_fetch_and_pushDown(ull* Pos, ull* oram_) {
 
 int main() {
 
-  for (ull tc = 1; tc < 1000; tc++) {
+  for (ull tc = 0; tc < 1000; tc++) {
     cerr << tc << endl;
     Node* oram = new Node[2 * N];
     ull* oram_ = (ull*)oram;
+
     ull* Pos = new ull[N];
 
+    array<ull, n> mem = {0};
+
     initORAM_export(Pos, oram_);
-    assert(checkInvariant(Pos, oram_));
-    test_fetch(Pos, oram_);
-    test_fetch_and_pushDown(Pos, oram_);
+    assert(checkInvariant(Pos, oram_, mem));
+    test_fetch(Pos, oram_, mem);
+    test_fetch_and_pushDown(Pos, oram_, mem);
+    test_empty_read(Pos, oram_, mem);
 
     delete[] oram;
     delete[] Pos;
   }
+
+  cerr << "First part done" << endl;
+
+  for (ull tc = 0; tc < 100; tc++) {
+    cerr << tc << endl;
+
+    Node* oram = new Node[2 * N];
+    ull* oram_ = (ull*)oram;
+    ull* Pos = new ull[N];
+
+    array<ull, n> mem = {0};
+
+    initORAM_export(Pos, oram_);
+    assert(checkInvariant(Pos, oram_, mem));
+
+    for (ull it = 0; it < 1000; it++) {
+      ull in = rand() % n;
+
+      ull t = rand() % 2;
+
+      if (t) { // Read
+        ull v = read_export(Pos, oram_, in);
+        assert(v == mem[in]);
+        assert(checkInvariant(Pos, oram_, mem));
+      } else { // Write
+        ull v = rand();
+        write_export(Pos, oram_, in, v);
+        mem[in] = v;
+        assert(checkInvariant(Pos, oram_, mem));
+      }
+    }
+  }
+
 }
 
 
