@@ -147,7 +147,10 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
     reg u64 k = 0;
     while (k < K) {
       reg u64 pk = k * (2 + b_sz);
-      reg u64 this_i = node[pk];
+
+      reg ptr u64[2 + b_sz] nodeElem = node[pk: 2 + b_sz];
+
+      reg u64 this_i = nodeElem[0];
       if (this_i == i) {
         ans_j = ix;
         ans_k = k;
@@ -155,14 +158,12 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
         reg u64 idx = 0;
         while (idx < (2 + b_sz)) {
           _ = res[idx];
-          reg u64 pk_add_idx = pk;
-          pk_add_idx += idx;
-          reg u64 v = node[pk_add_idx];
+          reg u64 v = nodeElem[idx];
           res[idx] = v;
           if (idx == 0) {
-            node[pk_add_idx] = N;
+            nodeElem[idx] = N;
           } else {
-            node[pk_add_idx] = 0;
+            nodeElem[idx] = 0;
           }
 
           idx += 1;
@@ -171,15 +172,15 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
         reg u64 idx = 0;
         while (idx < (2 + b_sz)) {
           reg u64 in_res = res[idx];
-          reg u64 pk_add_idx = pk;
-          pk_add_idx += idx;
-          reg u64 v = node[pk_add_idx];
+          reg u64 v = nodeElem[idx];
           res[idx] = in_res;
-          node[pk_add_idx] = v;
+          nodeElem[idx] = v;
 
           idx += 1;
         }
       }
+
+      node[pk: 2 + b_sz] = nodeElem;
 
       k += 1;
     }
