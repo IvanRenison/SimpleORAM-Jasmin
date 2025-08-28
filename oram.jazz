@@ -127,55 +127,6 @@ fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg u64 i, reg u64 pos, reg ptr u
 }
 
 /*
-Initialize a one level ORAM
-*/
-fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
-  reg u64 N2K = N * 2 * K;
-
-  reg u64 ix = 0;
-  while (ix < N2K) { // Mark all node elements as empty
-    reg u64 pi = ix * (2 + b_sz);
-    oram[pi] = N;
-    ix += 1;
-  }
-
-  reg u64 i = 0;
-  while (i < N) {
-    reg u64 N_reg = N;
-    reg u64 pos = random(N_reg);
-    pos = pos;
-    Pos[i] = pos;
-
-    reg u64 pi = N;
-    pi += pos;
-    pi *= K * (2 + b_sz);
-
-    reg ptr u64[K * (2 + b_sz)] node = oram[pi: K * (2 + b_sz)];
-    stack u64[b_sz] vals_mem;
-    reg u64 l = 0;
-    while (l < b_sz) {
-      vals_mem[l] = 0;
-      l += 1;
-    }
-    reg ptr u64[b_sz] vals = vals_mem;
-
-    node = addToNode(node, i, pos, vals);
-    oram[pi: K * (2 + b_sz)] = node;
-
-    i += 1;
-  }
-
-  return Pos, oram;
-}
-
-export
-fn initORAM_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
-  Pos = Pos; oram = oram;
-  Pos, oram = initORAM(Pos, oram);
-  return Pos, oram;
-}
-
-/*
   Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram in form (j, k)
 */
 fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
@@ -360,6 +311,60 @@ fn pushDown_export(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * 
   oram = pushDown(oram);
   return oram;
 }
+
+/*
+Initialize a one level ORAM
+*/
+fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+  reg u64 N2K = N * 2 * K;
+
+  reg u64 ix = 0;
+  while (ix < N2K) { // Mark all node elements as empty
+    reg u64 pi = ix * (2 + b_sz);
+    oram[pi] = N;
+    ix += 1;
+  }
+
+  reg u64 i = 0;
+  while (i < N) {
+    reg u64 N_reg = N;
+    reg u64 pos = random(N_reg);
+    pos = pos;
+    Pos[i] = pos;
+
+    stack u64[b_sz] vals_mem;
+    reg u64 l = 0;
+    while (l < b_sz) {
+      vals_mem[l] = 0;
+      l += 1;
+    }
+    reg ptr u64[b_sz] vals = vals_mem;
+
+    reg ptr u64[K * (2 + b_sz)] root_node = oram[K * (2 + b_sz): K * (2 + b_sz)];
+
+    root_node = addToNode(root_node, i, pos, vals);
+
+    oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
+
+    () = #spill(i);
+
+    oram = pushDown(oram);
+
+    () = #unspill(i);
+
+    i += 1;
+  }
+
+  return Pos, oram;
+}
+
+export
+fn initORAM_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+  Pos = Pos; oram = oram;
+  Pos, oram = initORAM(Pos, oram);
+  return Pos, oram;
+}
+
 
 fn read(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
   reg u64 i = in;
