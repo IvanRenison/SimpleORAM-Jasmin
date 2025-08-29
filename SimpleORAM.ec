@@ -217,8 +217,8 @@ theory SimpleORAM.
     var leaf_overflow : bool
     var random_tape : bool list
 
-    proc sample(n : int) : bool list = {
-      var bs : bool list;
+    proc sample(n : int) : path = {
+      var bs : path;
       var b : bool;
       var k : int;
       k <- 0;
@@ -285,7 +285,7 @@ theory SimpleORAM.
       var pushed : block list;
       var pback  : block list;
 
-      p <$ dlist {0,1} oram.`height;
+      p <@ sample(oram.`height);
       pushed <- [];
 
       i <- 0;
@@ -328,7 +328,7 @@ theory SimpleORAM.
       var pos  : path;
 
       (oram, block) <@ fetch(oram, c);
-      pos  <$ dlist {0,1} oram.`height;
+      pos  <@ sample(oram.`height);
       oram <- {| oram with positions = oram.`positions.[c <- pos] |};
       oram <@ putback(oram, (c, pos, block.`3));
       oram <@ flush(oram);
@@ -343,7 +343,7 @@ theory SimpleORAM.
       var aout : (oram * value option) option;
 
       (oram, block) <@ fetch(oram, c);
-      pos  <$ dlist {0,1} oram.`height;
+      pos  <@ sample(oram.`height);
       oram <- {| oram with positions = oram.`positions.[c <- pos] |};
       oram <@ putback(oram, (c, pos, v));
       oram <@ flush(oram);
