@@ -26,11 +26,9 @@ x    -> a number
 */
 
 
-type pntr = u64;
-
-fn randombyte() -> reg u8 {
-  stack u8[1] buf;
-  reg u8 r;
+fn randombyte() -> reg u64 {
+  stack u64[1] buf;
+  reg u64 r;
   buf = #randombytes(buf);
   r = buf[0];
   return r;
@@ -38,8 +36,7 @@ fn randombyte() -> reg u8 {
 
 // Get a random number in [0, x)
 fn random(reg u64 x) -> reg u64 {
-  reg u8 a = randombyte();
-  reg u64 ans = (64u)(a);
+  reg u64 ans = randombyte();
   ans = ans % x;
   return ans;
 }
