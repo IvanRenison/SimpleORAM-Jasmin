@@ -113,6 +113,7 @@ fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem) -
       reg u64 j = 0;
       while (j < b_sz) {
         reg u64 this_v = this_nodeElem[2 + j];
+        _ = vals[j];
         this_nodeElem[2 + j] = this_v;
 
         j = j + 1;
@@ -132,6 +133,7 @@ fn false_addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeE
 
   _ = nodeElem[0];
   _ = nodeElem[1];
+  reg ptr u64[b_sz] vals = nodeElem[2: b_sz];
 
   reg u64 k = 0;
   while (k < K) {
@@ -147,6 +149,7 @@ fn false_addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeE
     reg u64 j = 0;
     while (j < b_sz) {
       reg u64 this_v = this_nodeElem[2 + j];
+      _ = vals[j];
       this_nodeElem[2 + j] = this_v;
 
       j = j + 1;
