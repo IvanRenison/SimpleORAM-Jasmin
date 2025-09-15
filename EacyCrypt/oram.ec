@@ -214,6 +214,89 @@ module M(SC:Syscall_t) = {
     }
     return (node, node_leakage, nodeElem_leakage);
   }
+
+  proc fetch(pos:BArray400.t, oram:BArray153600.t, res_0:BArray48.t, i:W64.t) : 
+      BArray400.t * BArray153600.t * BArray48.t * W64.t * W64.t * W64.t list * W64.t list = {
+    var ans_j:W64.t;
+    var ans_k:W64.t;
+    var ix:W64.t;
+    var pi:W64.t;
+    var node:BArray1536.t;
+    var k:W64.t;
+    var pk:W64.t;
+    var nodeElem:BArray48.t;
+    var this_i:W64.t;
+    var idx:W64.t;
+    var in_res:W64.t;
+    var v:W64.t;
+    var idx_0:W64.t;
+    var v_0:W64.t;
+    var  _0:W64.t;
+    var oram_leakage:W64.t list;
+    var res_0_leakage:W64.t list;
+    oram_leakage <- [];
+    res_0_leakage <- [];
+    node <- witness;
+    nodeElem <- witness;
+    ans_j <- (W64.of_int 0);
+    ans_k <- (W64.of_int 0);
+    ix <- (BArray400.get64 pos (W64.to_uint i));
+    ix <- (ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
+    while (((W64.of_int 0) \ult ix)) {
+      pi <- ix;
+      pi <- (pi * (W64.of_int (32 * (2 + 4))));
+      node <- (SBArray153600_1536.get_sub64 oram (W64.to_uint pi));
+      k <- (W64.of_int 0);
+      while ((k \ult (W64.of_int 32))) {
+        pk <- (k * (W64.of_int (2 + 4)));
+        nodeElem <- (SBArray1536_48.get_sub64 node (W64.to_uint pk));
+        this_i <- (BArray48.get64 nodeElem 0);
+        oram_leakage <- (pi + pk + W64.of_int 0) :: oram_leakage;
+        if ((this_i = i)) {
+          ans_j <- ix;
+          ans_k <- k;
+          idx_0 <- (W64.of_int 0);
+          while ((idx_0 \ult (W64.of_int (2 + 4)))) {
+             _0 <- (BArray48.get64 res_0 (W64.to_uint idx_0));
+            res_0_leakage <- idx_0 :: res_0_leakage;
+            v_0 <- (BArray48.get64 nodeElem (W64.to_uint idx_0));
+            oram_leakage <- (pi + pk + idx_0) :: oram_leakage;
+            res_0 <- (BArray48.set64 res_0 (W64.to_uint idx_0) v_0);
+            res_0_leakage <- idx_0 :: res_0_leakage;
+            if ((idx_0 = (W64.of_int 0))) {
+              nodeElem <-
+              (BArray48.set64 nodeElem (W64.to_uint idx_0)
+              (W64.of_int (((200 + 4) - 1) %/ 4)));
+              oram_leakage <- (pi + pk + idx_0) :: oram_leakage;
+            } else {
+              nodeElem <-
+              (BArray48.set64 nodeElem (W64.to_uint idx_0) (W64.of_int 0));
+              oram_leakage <- (pi + pk + idx_0) :: oram_leakage;
+            }
+            idx_0 <- (idx_0 + (W64.of_int 1));
+          }
+        } else {
+          idx <- (W64.of_int 0);
+          while ((idx \ult (W64.of_int (2 + 4)))) {
+            in_res <- (BArray48.get64 res_0 (W64.to_uint idx));
+            res_0_leakage <- idx :: res_0_leakage;
+            v <- (BArray48.get64 nodeElem (W64.to_uint idx));
+            oram_leakage <- (pi + pk + idx) :: oram_leakage;
+            res_0 <- (BArray48.set64 res_0 (W64.to_uint idx) in_res);
+            res_0_leakage <- idx :: res_0_leakage;
+            nodeElem <- (BArray48.set64 nodeElem (W64.to_uint idx) v);
+            oram_leakage <- (pi + pk + idx) :: oram_leakage;
+            idx <- (idx + (W64.of_int 1));
+          }
+        }
+        node <- (SBArray1536_48.set_sub64 node (W64.to_uint pk) nodeElem);
+        k <- (k + (W64.of_int 1));
+      }
+      oram <- (SBArray153600_1536.set_sub64 oram (W64.to_uint pi) node);
+      ix <- (ix `>>` (W8.of_int 1));
+    }
+    return (pos, oram, res_0, ans_j, ans_k, oram_leakage, res_0_leakage);
+  }
 }.
 
 module OnlyLeakage = {
@@ -248,6 +331,41 @@ module OnlyLeakage = {
       k <- (k + (W64.of_int 1));
     }
     return (node_leakage, nodeElem_leakage);
+  }
+
+  proc fetch_leakage(pos:BArray400.t, oram:BArray153600.t, res_0:BArray48.t, i:W64.t) : 
+      W64.t list * W64.t list = {
+    var ix:W64.t;
+    var pi:W64.t;
+    var k:W64.t;
+    var pk:W64.t;
+    var idx:W64.t;
+    var oram_leakage:W64.t list;
+    var res_0_leakage:W64.t list;
+    oram_leakage <- [];
+    res_0_leakage <- [];
+    ix <- (BArray400.get64 pos (W64.to_uint i));
+    ix <- (ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
+    while (((W64.of_int 0) \ult ix)) {
+      pi <- ix;
+      pi <- (pi * (W64.of_int (32 * (2 + 4))));
+      k <- (W64.of_int 0);
+      while ((k \ult (W64.of_int 32))) {
+        pk <- (k * (W64.of_int (2 + 4)));
+        oram_leakage <- (pi + pk + W64.of_int 0) :: oram_leakage;
+        idx <- (W64.of_int 0);
+        while ((idx \ult (W64.of_int (2 + 4)))) {
+          res_0_leakage <- idx :: res_0_leakage;
+          oram_leakage <- (pi + pk + idx) :: oram_leakage;
+          res_0_leakage <- idx :: res_0_leakage;
+          oram_leakage <- (pi + pk + idx) :: oram_leakage;
+          idx <- (idx + (W64.of_int 1));
+        }
+        k <- (k + (W64.of_int 1));
+      }
+      ix <- (ix `>>` (W8.of_int 1));
+    }
+    return (oram_leakage, res_0_leakage);
   }
 }.
 
@@ -308,4 +426,42 @@ proof.
       * auto.
     + auto.
   - auto.
+qed.
+
+lemma leakage_fetch :
+  equiv[M2.fetch ~ OnlyLeakage.fetch_leakage :
+    ={pos, i} ==> res{1}.`6 = res{2}.`1
+  ].
+proof.
+  proc.
+  seq 8 4 : (={pos, i, oram_leakage, ix}).
+  - auto.
+  while (={pos, i, oram_leakage, ix}).
+  - seq 4 3 : (={pos, i, oram_leakage, ix, pi, k}).
+    + auto.
+    seq 1 1 : (={pos, i, oram_leakage, ix, pi, k}).
+    + while (={pos, i, oram_leakage, ix, pi, k}).
+      * seq 4 2 : (={pos, i, oram_leakage, ix, pi, k, pk}).
+        - auto.
+        if{1}.
+        - seq 3 1 : (={pos, i, oram_leakage, ix, pi, k, pk} /\ idx_0{1} = idx{2}).
+          + auto.
+          seq 1 1 : (={pos, i, oram_leakage, ix, pi, k, pk} /\ idx_0{1} = idx{2}).
+          + while (={pos, i, oram_leakage, ix, pi, k, pk} /\ idx_0{1} = idx{2}).
+            * auto.
+            auto.
+          auto.
+        - seq 1 1 : (={pos, i, oram_leakage, ix, pi, k, pk, idx}).
+          + auto.
+          seq 1 1 : (={pos, i, oram_leakage, ix, pi, k, pk, idx}).
+          * while (={pos, i, oram_leakage, ix, pi, k, pk, idx}).
+            - auto.
+              skip.
+              smt().
+          * auto.
+            skip.
+            smt().
+      * auto.
+        skip.
+        smt().
 qed.
