@@ -29,14 +29,40 @@ x    -> a number
 fn randombyte() -> reg u64 {
   stack u64[1] buf;
   reg u64 r;
+  reg u64 r2;
   buf = #randombytes(buf);
   r = buf[0];
+  buf = #randombytes(buf);
+  r2 = buf[0];
+  r2 = r2 << 8;
+  r = r | r2;
+  buf = #randombytes(buf);
+  r2 = buf[0];
+  r2 = r2 << 16;
+  r = r | r2;
+  buf = #randombytes(buf);
+  r2 = buf[0];
+  r2 = r2 << 24;
+  r = r | r2;
+  buf = #randombytes(buf);
+  r2 = buf[0];
+  r2 = r2 << 32;
+  r = r | r2;
+  buf = #randombytes(buf);
+  r2 = buf[0];
+  r2 = r2 << 40;
+  r = r | r2;
+  buf = #randombytes(buf);
+  r2 = buf[0];
+  r2 = r2 << 48;
+  r = r | r2;
   return r;
 }
 
 // Get a random number in [0, x)
 fn random(reg u64 x) -> reg u64 {
   reg u64 ans = randombyte();
+  ans = ans;
   ans = ans % x;
   return ans;
 }
