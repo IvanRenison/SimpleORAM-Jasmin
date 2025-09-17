@@ -465,6 +465,62 @@ module M(SC:Syscall_t) = {
     }
     return (oram, oram_leakage);
   }
+  proc initORAM (pos:BArray400.t, oram:BArray153600.t) : BArray400.t *
+                                                         BArray153600.t * W64.t list = {
+    var n2K:W64.t;
+    var ix:W64.t;
+    var pi:W64.t;
+    var i:W64.t;
+    var n_reg:W64.t;
+    var pos_0:W64.t;
+    var nodeElem_mem:BArray48.t;
+    var l:W64.t;
+    var nodeElem:BArray48.t;
+    var root_node:BArray1536.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    nodeElem <- witness;
+    nodeElem_mem <- witness;
+    root_node <- witness;
+    n2K <- (W64.of_int (((((200 + 4) - 1) %/ 4) * 2) * 32));
+    ix <- (W64.of_int 0);
+    while ((ix \ult n2K)) {
+      pi <- (ix * (W64.of_int (2 + 4)));
+      oram <-
+      (BArray153600.set64 oram (W64.to_uint pi)
+      (W64.of_int (((200 + 4) - 1) %/ 4)));
+      oram_leakage <- pi :: oram_leakage;
+      ix <- (ix + (W64.of_int 1));
+    }
+    i <- (W64.of_int 0);
+    while ((i \ult (W64.of_int (((200 + 4) - 1) %/ 4)))) {
+      n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
+      pos_0 <@ random (n_reg);
+      pos_0 <- pos_0;
+      pos <- (BArray400.set64 pos (W64.to_uint i) pos_0);
+      nodeElem_mem <- (BArray48.set64 nodeElem_mem 0 i);
+      nodeElem_mem <- (BArray48.set64 nodeElem_mem 1 pos_0);
+      l <- (W64.of_int 2);
+      while ((l \ult (W64.of_int (2 + 4)))) {
+        nodeElem_mem <-
+        (BArray48.set64 nodeElem_mem (W64.to_uint l) (W64.of_int 0));
+        l <- (l + (W64.of_int 1));
+      }
+      nodeElem <- nodeElem_mem;
+      root_node <- (SBArray153600_1536.get_sub64 oram (32 * (2 + 4)));
+      (root_node, aux_leakage_1, aux_leakage_2) <@ addToNode (root_node, nodeElem);
+      oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
+      oram <- (SBArray153600_1536.set_sub64 oram (32 * (2 + 4)) root_node);
+      (* Erased call to spill *)
+      (oram, aux_leakage_1) <@ pushDown (oram);
+      oram_leakage <- aux_leakage_1 ++ oram_leakage;
+      (* Erased call to unspill *)
+      i <- (i + (W64.of_int 1));
+    }
+    return (pos, oram, oram_leakage);
+  }
 }.
 
 module M2 = M(Syscall).
@@ -538,7 +594,7 @@ module OnlyLeakage = {
     return (oram_leakage, res_0_leakage);
   }
 
-  proc pushDown_leakage (oram:BArray153600.t) : W64.t list = {
+  proc pushDown_leakage () : W64.t list = {
     var n_reg:W64.t;
     var ix0:W64.t;
     var l:W64.t;
@@ -580,6 +636,232 @@ module OnlyLeakage = {
         }
       }
     }
+    return oram_leakage;
+  }
+
+  proc initORAM_leakage() : W64.t list = {
+    var n2K:W64.t;
+    var ix:W64.t;
+    var pi:W64.t;
+    var i:W64.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    n2K <- (W64.of_int (((((200 + 4) - 1) %/ 4) * 2) * 32));
+    ix <- (W64.of_int 0);
+    while ((ix \ult n2K)) {
+      pi <- (ix * (W64.of_int (2 + 4)));
+      oram_leakage <- pi :: oram_leakage;
+      ix <- (ix + (W64.of_int 1));
+    }
+    i <- (W64.of_int 0);
+    while ((i \ult (W64.of_int (((200 + 4) - 1) %/ 4)))) {
+      (aux_leakage_1, aux_leakage_2) <@ addToNode_leakage();
+      oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
+      aux_leakage_1 <@ pushDown_leakage();
+      oram_leakage <- aux_leakage_1 ++ oram_leakage;
+      i <- (i + (W64.of_int 1));
+    }
+    return (oram_leakage);
+  }
+}.
+
+module RandomTape = {
+  proc pushDown_tape (oram:BArray153600.t, ix0:W64.t) : BArray153600.t * W64.t list = {
+    var l:W64.t;
+    var k:W64.t;
+    var ik:W64.t;
+    var toAdd:BArray1536.t;
+    var ix:W64.t;
+    var pi:W64.t;
+    var node:BArray1536.t;
+    var k_0:W64.t;
+    var ik_0:W64.t;
+    var i:W64.t;
+    var this_nodeElem_toAdd:BArray48.t;
+    var this_nodeElem_toAdd_0:BArray48.t;
+    var next_l:W64.t;
+    var next_ix:W64.t;
+    var ik_1:W64.t;
+    var this_i:W64.t;
+    var this_pos:W64.t;
+    var this_nodeElem:BArray48.t;
+    var this_pos_ix:W64.t;
+    var isDes_b:bool;
+    var isDes:W8.t;
+    var cond_b:bool;
+    var cond:W8.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    node <- witness;
+    this_nodeElem <- witness;
+    this_nodeElem_toAdd <- witness;
+    this_nodeElem_toAdd_0 <- witness;
+    toAdd <- witness;
+    ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
+    l <@ M2.bSR (ix0);
+    l <- (l + (W64.of_int 1));
+    k <- (W64.of_int 0);
+    while ((k \ult (W64.of_int 32))) {
+      ik <- (k * (W64.of_int (2 + 4)));
+      toAdd <-
+      (BArray1536.set64 toAdd (W64.to_uint ik)
+      (W64.of_int (((200 + 4) - 1) %/ 4)));
+      k <- (k + (W64.of_int 1));
+    }
+    while (((W64.of_int 0) \ult l)) {
+      l <- (l - (W64.of_int 1));
+      l <- l;
+      (* Erased call to spill *)
+      ix <- ix0;
+      ix <- (ix `>>` (truncateu8 (l `&` (W64.of_int 63))));
+      pi <- (ix * (W64.of_int (32 * (2 + 4))));
+      node <- (SBArray153600_1536.get_sub64 oram (W64.to_uint pi));
+      (* Erased call to spill *)
+      k_0 <- (W64.of_int 0);
+      while ((k_0 \ult (W64.of_int 32))) {
+        ik_0 <- (k_0 * (W64.of_int (2 + 4)));
+        i <- (BArray1536.get64 toAdd (W64.to_uint ik_0));
+        if ((i <> (W64.of_int (((200 + 4) - 1) %/ 4)))) {
+          this_nodeElem_toAdd_0 <-
+          (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
+          node <- node;
+          (node, aux_leakage_1, aux_leakage_2) <@ M2.addToNode (node, this_nodeElem_toAdd_0);
+          oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
+          node <- node;
+          toAdd <-
+          (BArray1536.set64 toAdd (W64.to_uint ik_0)
+          (W64.of_int (((200 + 4) - 1) %/ 4)));
+        } else {
+          this_nodeElem_toAdd <-
+          (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
+          node <- node;
+          (node, aux_leakage_1, aux_leakage_2) <@ M2.false_addToNode (node, this_nodeElem_toAdd);
+          oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
+          node <- node;
+          toAdd <-
+          (BArray1536.set64 toAdd (W64.to_uint ik_0)
+          (W64.of_int (((200 + 4) - 1) %/ 4)));
+        }
+        k_0 <- (k_0 + (W64.of_int 1));
+      }
+      (* Erased call to unspill *)
+      if ((l <> (W64.of_int 0))) {
+        next_l <- l;
+        next_l <- (next_l - (W64.of_int 1));
+        next_ix <- ix0;
+        next_ix <- (next_ix `>>` (truncateu8 (next_l `&` (W64.of_int 63))));
+        (* Erased call to spill *)
+        k_0 <- (W64.of_int 0);
+        while ((k_0 \ult (W64.of_int 32))) {
+          ik_1 <- (k_0 * (W64.of_int (2 + 4)));
+          (* Erased call to spill *)
+          this_i <- (BArray1536.get64 node (W64.to_uint ik_1));
+          oram_leakage <- (pi + ik_1) :: oram_leakage;
+          this_pos <-
+          (BArray1536.get64 node (W64.to_uint (ik_1 + (W64.of_int 1))));
+          oram_leakage <- (pi + ik_1 + (W64.of_int 1)) :: oram_leakage;
+          this_nodeElem <-
+          (SBArray1536_48.get_sub64 node (W64.to_uint ik_1));
+          this_pos_ix <- this_pos;
+          this_pos_ix <- (this_pos_ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
+          isDes_b <@ M2.isDesOf (next_ix, this_pos_ix);
+          isDes <- (SETcc isDes_b);
+          cond_b <- (this_i <> (W64.of_int (((200 + 4) - 1) %/ 4)));
+          cond <- (SETcc cond_b);
+          cond <- (cond `&` isDes);
+          if ((cond = (W8.of_int 1))) {
+            (toAdd, aux_leakage_1, aux_leakage_2) <@ M2.addToNode (toAdd, this_nodeElem);
+            oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
+            node <-
+            (BArray1536.set64 node (W64.to_uint ik_1)
+            (W64.of_int (((200 + 4) - 1) %/ 4)));
+            oram_leakage <- (pi + ik_1) :: oram_leakage;
+          } else {
+            (toAdd, aux_leakage_1, aux_leakage_2) <@ M2.false_addToNode (toAdd, this_nodeElem);
+            oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
+            node <- (BArray1536.set64 node (W64.to_uint ik_1) this_i);
+            oram_leakage <- (pi + ik_1) :: oram_leakage;
+          }
+          (* Erased call to unspill *)
+          k_0 <- (k_0 + (W64.of_int 1));
+        }
+        (* Erased call to unspill *)
+      } else {
+        
+      }
+      (* Erased call to unspill *)
+      oram <- (SBArray153600_1536.set_sub64 oram (W64.to_uint pi) node);
+    }
+    return (oram, oram_leakage);
+  }
+
+  proc pushDown (oram:BArray153600.t) : BArray153600.t * W64.t list = {
+    var ix0:W64.t;
+    var oram_leakage:W64.t list;
+    var n_reg:W64.t;
+    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
+    ix0 <@ M2.random (n_reg);
+    (oram, oram_leakage) <@ pushDown_tape(oram, ix0);
+    return (oram, oram_leakage);
+  }
+
+}.
+
+module RandomTapeOnlyLeakage = {
+  proc pushDown_tape_leakage (ix0:W64.t) : W64.t list = {
+    var n_reg:W64.t;
+    var l:W64.t;
+    var ix:W64.t;
+    var pi:W64.t;
+    var k_0:W64.t;
+    var ik_1:W64.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
+    ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
+    l <@ M2.bSR (ix0);
+    l <- (l + (W64.of_int 1));
+    while (((W64.of_int 0) \ult l)) {
+      l <- (l - (W64.of_int 1));
+      l <- l;
+      ix <- ix0;
+      ix <- (ix `>>` (truncateu8 (l `&` (W64.of_int 63))));
+      pi <- (ix * (W64.of_int (32 * (2 + 4))));
+      k_0 <- (W64.of_int 0);
+      while ((k_0 \ult (W64.of_int 32))) {
+        (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.addToNode_leakage();
+        oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
+        k_0 <- (k_0 + (W64.of_int 1));
+      }
+      if ((l <> (W64.of_int 0))) {
+        k_0 <- (W64.of_int 0);
+        while ((k_0 \ult (W64.of_int 32))) {
+          ik_1 <- (k_0 * (W64.of_int (2 + 4)));
+          oram_leakage <- (pi + ik_1) :: oram_leakage;
+          oram_leakage <- (pi + ik_1 + (W64.of_int 1)) :: oram_leakage;
+          (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.addToNode_leakage();
+          oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
+          oram_leakage <- (pi + ik_1) :: oram_leakage;
+          k_0 <- (k_0 + (W64.of_int 1));
+        }
+      }
+    }
+    return oram_leakage;
+  }
+
+  proc pushDown_leakage() : W64.t list = {
+    var ix0:W64.t;
+    var oram_leakage:W64.t list;
+    var n_reg:W64.t;
+    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
+    ix0 <@ M2.random (n_reg);
+    oram_leakage <@ pushDown_tape_leakage(ix0);
     return oram_leakage;
   }
 }.
@@ -756,5 +1038,28 @@ proof.
       * auto.
 qed.
 
+lemma pushDown_tape_equiv :
+  equiv[M2.pushDown ~ RandomTape.pushDown :
+    ={oram} ==> ={res}
+  ].
+proof.
+  proc.
+  inline{2} 3.
+  admit. (* This should be easy, because the two programs are very similar, but I don'r know if we have the necessary tactics to transform one in to the other *)
+qed.
 
+lemma leakage_pushDown_tape :
+  equiv[RandomTape.pushDown_tape ~ RandomTapeOnlyLeakage.pushDown_tape_leakage :
+    ={ix0} ==> res{1}.`2 = res{2}
+  ].
+proof.
+  admit.
+qed.
 
+lemma leackage_initORAM :
+  equiv[M2.initORAM ~ OnlyLeakage.initORAM_leakage :
+    true ==> res{1}.`3 = res{2}
+  ].
+proof.
+  admit.
+qed.
