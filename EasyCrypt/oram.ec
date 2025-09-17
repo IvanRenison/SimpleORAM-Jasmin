@@ -535,7 +535,7 @@ type prog_calls = inst_calls list.
 (* Execute a list of operations in an emty ORAM and return the result of the reads and the leackage *)
 module CompileCalls = {
   proc compile_calls(x:prog_calls) : W64.t list * W64.t list = {
-    return ([], []);
+    return ([], []); (* TO DO *)
   }
 }.
 
@@ -825,6 +825,67 @@ module RandomTape = {
     return (oram, oram_leakage);
   }
 
+  proc initORAM_tape (pos:BArray400.t, oram:BArray153600.t, tape:W64.t list)
+      : BArray400.t * BArray153600.t * W64.t list = {
+    var n2K:W64.t;
+    var ix:W64.t;
+    var pi:W64.t;
+    var i:W64.t;
+    var n_reg:W64.t;
+    var pos_0:W64.t;
+    var nodeElem_mem:BArray48.t;
+    var l:W64.t;
+    var nodeElem:BArray48.t;
+    var root_node:BArray1536.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    var aux_tape:W64.t;
+    oram_leakage <- [];
+    nodeElem <- witness;
+    nodeElem_mem <- witness;
+    root_node <- witness;
+    n2K <- (W64.of_int (((((200 + 4) - 1) %/ 4) * 2) * 32));
+    ix <- (W64.of_int 0);
+    while ((ix \ult n2K)) {
+      pi <- (ix * (W64.of_int (2 + 4)));
+      oram <-
+      (BArray153600.set64 oram (W64.to_uint pi)
+      (W64.of_int (((200 + 4) - 1) %/ 4)));
+      oram_leakage <- pi :: oram_leakage;
+      ix <- (ix + (W64.of_int 1));
+    }
+    i <- (W64.of_int 0);
+    while ((i \ult (W64.of_int (((200 + 4) - 1) %/ 4)))) {
+      n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
+      pos_0 <- head witness tape;
+      tape <- behead tape;
+      pos_0 <- pos_0;
+      pos <- (BArray400.set64 pos (W64.to_uint i) pos_0);
+      nodeElem_mem <- (BArray48.set64 nodeElem_mem 0 i);
+      nodeElem_mem <- (BArray48.set64 nodeElem_mem 1 pos_0);
+      l <- (W64.of_int 2);
+      while ((l \ult (W64.of_int (2 + 4)))) {
+        nodeElem_mem <-
+        (BArray48.set64 nodeElem_mem (W64.to_uint l) (W64.of_int 0));
+        l <- (l + (W64.of_int 1));
+      }
+      nodeElem <- nodeElem_mem;
+      root_node <- (SBArray153600_1536.get_sub64 oram (32 * (2 + 4)));
+      (root_node, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (root_node, nodeElem);
+      oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
+      oram <- (SBArray153600_1536.set_sub64 oram (32 * (2 + 4)) root_node);
+      (* Erased call to spill *)
+      aux_tape <- head witness tape;
+      tape <- behead tape;
+      (oram, aux_leakage_1) <@ pushDown_tape(oram, aux_tape);
+      oram_leakage <- aux_leakage_1 ++ oram_leakage;
+      (* Erased call to unspill *)
+      i <- (i + (W64.of_int 1));
+    }
+    return (pos, oram, oram_leakage);
+  }
+  
   proc compile_calls_tape(x:prog_calls, tape:W64.t list) : W64.t list * W64.t list = {
     var oram_leakage: W64.t list;
     return ([], oram_leakage);
