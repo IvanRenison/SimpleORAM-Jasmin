@@ -521,25 +521,25 @@ module M(SC:Syscall_t) = {
     }
     return (pos, oram, oram_leakage);
   }
-
-  
-
 }.
 
+module Jasmin = M(Syscall).
+
+(* Type of operations that can be done in an ORAM *)
 type inst_calls = [
   | Rd of W64.t
   | Wt of (W64.t * W64.t)
 ].
 type prog_calls = inst_calls list.
 
+(* Execute a list of operations in an emty ORAM and return the result of the reads and the leackage *)
 module CompileCalls = {
-  proc compile_calls(x:prog_calls) : W64.t list * W64.t list = { (* Returns result of reads, leackage *)
+  proc compile_calls(x:prog_calls) : W64.t list * W64.t list = {
     return ([], []);
   }
 }.
 
-module M2 = M(Syscall).
-
+(* Module for versions of the procs that only return the leackage part *)
 module OnlyLeakage = {
   proc addToNode_leakage() : W64.t list * W64.t list = {
     var k:W64.t;
@@ -622,9 +622,9 @@ module OnlyLeakage = {
     var aux_leakage_2:W64.t list;
     oram_leakage <- [];
     n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <@ M2.random (n_reg);
+    ix0 <@ Jasmin.random (n_reg);
     ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    l <@ M2.bSR (ix0);
+    l <@ Jasmin.bSR (ix0);
     l <- (l + (W64.of_int 1));
     while (((W64.of_int 0) \ult l)) {
       l <- (l - (W64.of_int 1));
@@ -682,6 +682,7 @@ module OnlyLeakage = {
   }
 }.
 
+(* Module for versions of the procs in witch the computation is separated from the generation of random numbers *)
 module RandomTape = {
   proc pushDown_tape (oram:BArray153600.t, ix0:W64.t) : BArray153600.t * W64.t list = {
     var l:W64.t;
@@ -717,7 +718,7 @@ module RandomTape = {
     this_nodeElem_toAdd_0 <- witness;
     toAdd <- witness;
     ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    l <@ M2.bSR (ix0);
+    l <@ Jasmin.bSR (ix0);
     l <- (l + (W64.of_int 1));
     k <- (W64.of_int 0);
     while ((k \ult (W64.of_int 32))) {
@@ -744,7 +745,7 @@ module RandomTape = {
           this_nodeElem_toAdd_0 <-
           (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
           node <- node;
-          (node, aux_leakage_1, aux_leakage_2) <@ M2.addToNode (node, this_nodeElem_toAdd_0);
+          (node, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (node, this_nodeElem_toAdd_0);
           oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
           node <- node;
           toAdd <-
@@ -754,7 +755,7 @@ module RandomTape = {
           this_nodeElem_toAdd <-
           (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
           node <- node;
-          (node, aux_leakage_1, aux_leakage_2) <@ M2.false_addToNode (node, this_nodeElem_toAdd);
+          (node, aux_leakage_1, aux_leakage_2) <@ Jasmin.false_addToNode (node, this_nodeElem_toAdd);
           oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
           node <- node;
           toAdd <-
@@ -783,20 +784,20 @@ module RandomTape = {
           (SBArray1536_48.get_sub64 node (W64.to_uint ik_1));
           this_pos_ix <- this_pos;
           this_pos_ix <- (this_pos_ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
-          isDes_b <@ M2.isDesOf (next_ix, this_pos_ix);
+          isDes_b <@ Jasmin.isDesOf (next_ix, this_pos_ix);
           isDes <- (SETcc isDes_b);
           cond_b <- (this_i <> (W64.of_int (((200 + 4) - 1) %/ 4)));
           cond <- (SETcc cond_b);
           cond <- (cond `&` isDes);
           if ((cond = (W8.of_int 1))) {
-            (toAdd, aux_leakage_1, aux_leakage_2) <@ M2.addToNode (toAdd, this_nodeElem);
+            (toAdd, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (toAdd, this_nodeElem);
             oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
             node <-
             (BArray1536.set64 node (W64.to_uint ik_1)
             (W64.of_int (((200 + 4) - 1) %/ 4)));
             oram_leakage <- (pi + ik_1) :: oram_leakage;
           } else {
-            (toAdd, aux_leakage_1, aux_leakage_2) <@ M2.false_addToNode (toAdd, this_nodeElem);
+            (toAdd, aux_leakage_1, aux_leakage_2) <@ Jasmin.false_addToNode (toAdd, this_nodeElem);
             oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
             node <- (BArray1536.set64 node (W64.to_uint ik_1) this_i);
             oram_leakage <- (pi + ik_1) :: oram_leakage;
@@ -819,7 +820,7 @@ module RandomTape = {
     var oram_leakage:W64.t list;
     var n_reg:W64.t;
     n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <@ M2.random (n_reg);
+    ix0 <@ Jasmin.random (n_reg);
     (oram, oram_leakage) <@ pushDown_tape(oram, ix0);
     return (oram, oram_leakage);
   }
@@ -830,6 +831,7 @@ module RandomTape = {
   }
 }.
 
+(* Module for versions of the procs in witch the computation is separated from the generation of random numbers, and the procs only return the leakage *)
 module RandomTapeOnlyLeakage = {
   proc pushDown_tape_leakage (ix0:W64.t) : W64.t list = {
     var n_reg:W64.t;
@@ -844,7 +846,7 @@ module RandomTapeOnlyLeakage = {
     oram_leakage <- [];
     n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
     ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    l <@ M2.bSR (ix0);
+    l <@ Jasmin.bSR (ix0);
     l <- (l + (W64.of_int 1));
     while (((W64.of_int 0) \ult l)) {
       l <- (l - (W64.of_int 1));
@@ -879,14 +881,14 @@ module RandomTapeOnlyLeakage = {
     var oram_leakage:W64.t list;
     var n_reg:W64.t;
     n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <@ M2.random (n_reg);
+    ix0 <@ Jasmin.random (n_reg);
     oram_leakage <@ pushDown_tape_leakage(ix0);
     return oram_leakage;
   }
 }.
 
 lemma leakage_addToNode :
-  equiv[ M2.addToNode ~ OnlyLeakage.addToNode_leakage :
+  equiv[ Jasmin.addToNode ~ OnlyLeakage.addToNode_leakage :
       true ==> res{1}.`2 = res{2}.`1
   ].
 proof.
@@ -924,7 +926,7 @@ proof.
 qed.
 
 lemma leakage2_addToNode :
-  equiv[ M2.addToNode ~ OnlyLeakage.addToNode_leakage :
+  equiv[ Jasmin.addToNode ~ OnlyLeakage.addToNode_leakage :
       true ==> res{1}.`3 = res{2}.`2
   ].
 proof.
@@ -932,7 +934,7 @@ proof.
 qed.
 
 lemma leakage_false_addToNode :
-  equiv[ M2.false_addToNode ~ OnlyLeakage.addToNode_leakage :
+  equiv[ Jasmin.false_addToNode ~ OnlyLeakage.addToNode_leakage :
       true ==> res{1}.`2 = res{2}.`1
   ].
 proof.
@@ -951,7 +953,7 @@ proof.
 qed.
 
 lemma leakage2_false_addToNode :
-  equiv[ M2.false_addToNode ~ OnlyLeakage.addToNode_leakage :
+  equiv[ Jasmin.false_addToNode ~ OnlyLeakage.addToNode_leakage :
       true ==> res{1}.`3 = res{2}.`2
   ].
 proof.
@@ -959,7 +961,7 @@ proof.
 qed.
 
 lemma leakage_fetch :
-  equiv[M2.fetch ~ OnlyLeakage.fetch_leakage :
+  equiv[Jasmin.fetch ~ OnlyLeakage.fetch_leakage :
     ={pos, i} ==> res{1}.`6 = res{2}.`1
   ].
 proof.
@@ -986,7 +988,7 @@ proof.
 qed.
 
 lemma leakage_pushDown :
-  equiv[M2.pushDown ~ OnlyLeakage.pushDown_leakage :
+  equiv[Jasmin.pushDown ~ OnlyLeakage.pushDown_leakage :
     true ==> res{1}.`2 = res{2}
   ].
 proof.
@@ -1002,7 +1004,7 @@ proof.
     + while{1} (={ix0, l, oram_leakage}) (32 - to_uint(k{1})).
       * move => &m1 z.
         auto.
-        smt.
+        smt. (* This is not good. But there seems to be no smt? tactic *)
       * auto.
         smt.
   - while (={ix0, l, oram_leakage}); auto.
@@ -1058,7 +1060,7 @@ proof.
 qed.
 
 lemma pushDown_tape_equiv :
-  equiv[M2.pushDown ~ RandomTape.pushDown :
+  equiv[Jasmin.pushDown ~ RandomTape.pushDown :
     ={oram} ==> ={res}
   ].
 proof.
@@ -1076,7 +1078,7 @@ proof.
 qed.
 
 lemma leackage_initORAM :
-  equiv[M2.initORAM ~ OnlyLeakage.initORAM_leakage :
+  equiv[Jasmin.initORAM ~ OnlyLeakage.initORAM_leakage :
     true ==> res{1}.`3 = res{2}
   ].
 proof.
@@ -1088,11 +1090,11 @@ require import SimpleORAM. (* From here we state theorems in relation with the E
 (*---*) import SimpleORAM.
 
 op to_EC_prog: prog_calls -> prog. (* Convert the program of reads and writes in to the EC model type *)
-op to_EC_tape: W64.t list -> bool list. (* Convert the tape in to the EC tape *)
+op to_EC_tape: W64.t list -> bool list. (* Convert the tape in to the EC model tape *)
 
-op EC_leakage_to_tape: leakage list -> bool list. (* Recovers the EC tape from the EC leakage *)
+op EC_leakage_to_tape: leakage list -> bool list. (* Recovers the EC model tape from the EC model leakage *)
 
-op from_EC_leakage: leakage list -> W64.t list. (* Convert the EX tape into a tape *)
+op from_EC_leakage: leakage list -> W64.t list. (* Convert the EC model tape into a tape *)
 
 op f_cells: cell list.
 
@@ -1107,4 +1109,5 @@ lemma leakage_correctness:
 proof.
   admit.
 qed.
+
 
