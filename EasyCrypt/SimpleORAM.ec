@@ -98,7 +98,7 @@ theory SimpleORAM.
 
         (* even when not found, leaking is always. *)
         leakage <- (Write, ps) :: leakage;
-        
+
         i <- i + 1;
       }
 
@@ -137,13 +137,13 @@ theory SimpleORAM.
         pushed  <- pushed ++ oram.`bucket ps;
         leakage <- (Read, ps) :: leakage;
 
-        pback <- if i = oram.`height 
+        pback <- if i = oram.`height
                  then pushed
                  else filter (fun block : block =>
                           (take (i+1) block.`2) <> (take (i+1) p)
                       ) pushed;
 
-        pushed <- if i = oram.`height 
+        pushed <- if i = oram.`height
                  then []
                  else filter (fun block : block =>
                          (take (i+1) block.`2) = (take (i+1) p)
@@ -358,21 +358,6 @@ theory SimpleORAM.
       var bs : bool list;
       var b : bool;
 
-      (* sample random tapes *)
-      random_tape <- [];
-      j <- 0;
-      while (j < (size C) * o.`height) {
-        b <$ dbool;
-        random_tape <- random_tape ++ [b];
-        j <- j + 1;
-      }
-      j <- 0;
-      while (j < (o.`height * size p)) {
-        b <$ dbool;
-        random_tape <- random_tape ++ [b];
-        j <- j + 1;
-      }
-
       (* initialize position map *)
       j <- 0;
       while (j < (size C)) {
@@ -434,8 +419,8 @@ theory SimpleORAM.
           forall i, 0 <= i <= o.`height =>
             let block = o.`bucket (take i p) in
             forall (b : block), b \in block =>
-              o.`positions b.`1 = b.`2 && 
-              take (if i <= size p then i else size p) b.`2 = 
+              o.`positions b.`1 = b.`2 &&
+              take (if i <= size p then i else size p) b.`2 =
                 take (if i <= size p then i else size p) p).
 
    lemma is_oram_height_gt0 (C : cell -> bool) (oram : oram) :

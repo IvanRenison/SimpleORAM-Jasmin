@@ -8,7 +8,7 @@ import SLH64.
 require import
 Array1 Array4 Array6 Array50 Array192 Array19200 BArray8 BArray32 BArray48
 BArray400 BArray1536 BArray153600 SBArray48_32 SBArray1536_48
-SBArray153600_1536.
+  SBArray153600_1536.
 
 module type Syscall_t = {
   proc randombytes_8 (_:BArray8.t) : BArray8.t
@@ -521,6 +521,21 @@ module M(SC:Syscall_t) = {
     }
     return (pos, oram, oram_leakage);
   }
+
+  
+
+}.
+
+type inst_calls = [
+  | Rd of W64.t
+  | Wt of (W64.t * W64.t)
+].
+type prog_calls = inst_calls list.
+
+module CompileCalls = {
+  proc compile_calls(x:prog_calls) : W64.t list * W64.t list = { (* Returns result of reads, leackage *)
+    return ([], []);
+  }
 }.
 
 module M2 = M(Syscall).
@@ -809,6 +824,10 @@ module RandomTape = {
     return (oram, oram_leakage);
   }
 
+  proc compile_calls_tape(x:prog_calls, tape:W64.t list) : W64.t list * W64.t list = {
+    var oram_leakage: W64.t list;
+    return ([], oram_leakage);
+  }
 }.
 
 module RandomTapeOnlyLeakage = {
@@ -1063,3 +1082,29 @@ lemma leackage_initORAM :
 proof.
   admit.
 qed.
+
+
+require import SimpleORAM. (* From here we state theorems in relation with the EC model *)
+(*---*) import SimpleORAM.
+
+op to_EC_prog: prog_calls -> prog. (* Convert the program of reads and writes in to the EC model type *)
+op to_EC_tape: W64.t list -> bool list. (* Convert the tape in to the EC tape *)
+
+op EC_leakage_to_tape: leakage list -> bool list. (* Recovers the EC tape from the EC leakage *)
+
+op from_EC_leakage: leakage list -> W64.t list. (* Convert the EX tape into a tape *)
+
+op f_cells: cell list.
+
+lemma leakage_correctness:
+    forall o, is_oram pred0 o
+  =>
+  equiv [RandomTape.compile_calls_tape ~ ORAM_Tape.compile:
+    ORAM_Tape.leakage{2} = [] /\ ORAM_Tape.random_tape{2} = to_EC_tape tape{1} /\
+      arg{2} = (o, to_EC_prog x{1}, f_cells)
+    ==>  res{1}.`2 = from_EC_leakage ORAM_Tape.leakage{2}
+  ].
+proof.
+  admit.
+qed.
+
