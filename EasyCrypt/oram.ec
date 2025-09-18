@@ -569,6 +569,58 @@ module M(SC:Syscall_t) = {
     (* Erased call to unspill *)
     return (pos, oram, ans, oram_leakage);
   }
+  proc write (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t, v:W64.t) :
+      BArray512.t * BArray196608.t * W64.t list = {
+    var i:W64.t;
+    var b_sz_reg:W64.t;
+    var j:W64.t;
+    var res_0:BArray48.t;
+    var res_p:BArray48.t;
+    var n_reg:W64.t;
+    var new_pos:W64.t;
+    var root_node:BArray1536.t;
+    var  _0:W64.t;
+    var  _1:W64.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    res_0 <- witness;
+    res_p <- witness;
+    root_node <- witness;
+    i <- in_0;
+    i <- i;
+    b_sz_reg <- (W64.of_int 4);
+    b_sz_reg <- b_sz_reg;
+    i <- (i \udiv b_sz_reg);
+    i <- i;
+    j <- in_0;
+    j <- j;
+    b_sz_reg <- b_sz_reg;
+    j <- (j \umod b_sz_reg);
+    j <- j;
+    res_p <- res_0;
+    (* Erased call to spill *)
+    (* Erased call to spill *)
+    (pos, oram, res_p,  _0,  _1, aux_leakage_1, aux_leakage_2) <@ fetch(pos, oram, res_p, i);
+    oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    (* Erased call to unspill *)
+    (* Erased call to unspill *)
+    res_p <- (BArray48.set64 res_p (W64.to_uint ((W64.of_int 2) + j)) v);
+    n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
+    new_pos <@ random (n_reg);
+    new_pos <- new_pos;
+    res_p <- (BArray48.set64 res_p 1 new_pos);
+    pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
+    root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
+    res_p <- res_p;
+    (root_node, aux_leakage_1, aux_leakage_2) <@ addToNode (root_node, res_p);
+    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
+    oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
+    (oram, aux_leakage_1) <@ pushDown (oram);
+    oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    return (pos, oram, oram_leakage);
+  }
 }.
 
 module Jasmin = M(Syscall).
@@ -745,6 +797,26 @@ module OnlyLeakage = {
     oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
     aux_leakage_1 <@ pushDown_leakage();
     oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    return oram_leakage;
+  }
+
+  proc write_leakage (pos:BArray512.t, in_0:W64.t) : W64.t list = {
+    var i:W64.t;
+    var b_sz_reg:W64.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    i <- in_0;
+    i <- i;
+    b_sz_reg <- (W64.of_int 4);
+    b_sz_reg <- b_sz_reg;
+    i <- (i \udiv b_sz_reg);
+    i <- i;
+    (aux_leakage_1, aux_leakage_2) <@ fetch_leakage (pos, i);
+    oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    (aux_leakage_1, aux_leakage_2) <@ addToNode_leakage();
+    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
     return oram_leakage;
   }
 }.
@@ -999,7 +1071,60 @@ module RandomTape = {
     (* Erased call to unspill *)
     return (pos, oram, ans, oram_leakage);
   }
-  
+
+  proc write_tape (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t, v:W64.t, tape_elem_1:W64.t, tape_elem_2:W64.t) :
+      BArray512.t * BArray196608.t * W64.t list = {
+    var i:W64.t;
+    var b_sz_reg:W64.t;
+    var j:W64.t;
+    var res_0:BArray48.t;
+    var res_p:BArray48.t;
+    var n_reg:W64.t;
+    var new_pos:W64.t;
+    var root_node:BArray1536.t;
+    var  _0:W64.t;
+    var  _1:W64.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    res_0 <- witness;
+    res_p <- witness;
+    root_node <- witness;
+    i <- in_0;
+    i <- i;
+    b_sz_reg <- (W64.of_int 4);
+    b_sz_reg <- b_sz_reg;
+    i <- (i \udiv b_sz_reg);
+    i <- i;
+    j <- in_0;
+    j <- j;
+    b_sz_reg <- b_sz_reg;
+    j <- (j \umod b_sz_reg);
+    j <- j;
+    res_p <- res_0;
+    (* Erased call to spill *)
+    (* Erased call to spill *)
+    (pos, oram, res_p,  _0,  _1, aux_leakage_1, aux_leakage_2) <@ Jasmin.fetch (pos, oram, res_p, i);
+    oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    (* Erased call to unspill *)
+    (* Erased call to unspill *)
+    res_p <- (BArray48.set64 res_p (W64.to_uint ((W64.of_int 2) + j)) v);
+    n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
+    new_pos <- tape_elem_1;
+    new_pos <- new_pos;
+    res_p <- (BArray48.set64 res_p 1 new_pos);
+    pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
+    root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
+    res_p <- res_p;
+    (root_node, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (root_node, res_p);
+    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
+    oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
+    (oram, aux_leakage_1) <@ pushDown_tape(oram, tape_elem_2);
+    oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    return (pos, oram, oram_leakage);
+  }
+
   proc compile_calls_tape(x:prog_calls, tape:W64.t list) : W64.t list * W64.t list = {
     var oram_leakage: W64.t list;
     return ([], oram_leakage); (* TO DO *)
@@ -1110,6 +1235,26 @@ module RandomTapeOnlyLeakage = {
     oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
     aux_leakage_1 <@ pushDown_tape_leakage(tape_elem_2);
     oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    return oram_leakage;
+  }
+
+  proc write_tape_leakage (pos:BArray512.t, in_0:W64.t, tape_elem_1:W64.t, tape_elem_2:W64.t) : W64.t list = {
+    var i:W64.t;
+    var b_sz_reg:W64.t;
+    var oram_leakage:W64.t list;
+    var aux_leakage_1:W64.t list;
+    var aux_leakage_2:W64.t list;
+    oram_leakage <- [];
+    i <- in_0;
+    i <- i;
+    b_sz_reg <- (W64.of_int 4);
+    b_sz_reg <- b_sz_reg;
+    i <- (i \udiv b_sz_reg);
+    i <- i;
+    (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.fetch_leakage (pos, i);
+    oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.addToNode_leakage();
+    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
     return oram_leakage;
   }
 }.
@@ -1323,7 +1468,7 @@ qed.
 lemma leakage_read :
   equiv[Jasmin.read ~ OnlyLeakage.read_leakage :
     ={pos} ==> res{1}.`4 = res{2}
-  ].  
+  ].
 proof.
   admit.
 qed.
@@ -1331,6 +1476,22 @@ qed.
 lemma leakage_read_tape :
   equiv[RandomTape.read_tape ~ RandomTapeOnlyLeakage.read_tape_leakage :
     ={pos, tape_elem_1, tape_elem_2} ==> res{1}.`4 = res{2}
+  ].
+proof.
+  admit.
+qed.
+
+lemma leakage_write :
+  equiv[Jasmin.write ~ OnlyLeakage.write_leakage :
+    ={pos} ==> res{1}.`3 = res{2}
+  ].
+proof.
+  admit.
+qed.
+
+lemma leakage_write_tape :
+  equiv[RandomTape.write_tape ~ RandomTapeOnlyLeakage.write_tape_leakage :
+    ={pos, tape_elem_1, tape_elem_2} ==> res{1}.`3 = res{2}
   ].
 proof.
   admit.
