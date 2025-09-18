@@ -1,4 +1,4 @@
-param int n = 200; // Size of virtual memory
+param int n = 256; // Size of virtual memory
 param int K = 32; // Bucket size
 param int b_sz = 4;  // Block size
 

@@ -8,7 +8,7 @@ using namespace std;
 typedef int64_t ll;
 typedef uint64_t ull;
 
-const ull n = 200; // Size of virtual memory
+const ull n = 256; // Size of virtual memory
 const ull K = 32; // Bucket size
 const ull b_sz = 4; // Block size
 
