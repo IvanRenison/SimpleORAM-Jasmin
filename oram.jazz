@@ -78,22 +78,23 @@ inline fn BSR(reg u64 x) -> reg u64 {
 }
 
 inline fn isDesOf(reg u64 j0, reg u64 j1) -> reg bool { // Is j1 a descendent of j0
-  reg u64 ans = 0;
 
-  if (j0 < j1) {
-    reg u64 bitsj0 = BSR(j0);
-    reg u64 bitsj1 = BSR(j1);
+  reg u64 bitsj0 = BSR(j0);
+  reg u64 bitsj1 = BSR(j1);
 
-    reg u64 diff = bitsj1 - bitsj0;
+  reg u64 diff = bitsj1 - bitsj0;
 
-    reg u64 j2 = j1 >> (diff & 63);
+  reg u64 j2 = j1;
+  j2 = j2 >> (diff & 63);
 
-    reg u64 one = 1;
-    ans = one if j2 == j0;
-  }
+  reg bool cond_b = j0 < j1;
+  reg u8 cond = #SETcc(cond_b);
+  reg bool cond2_b = j2 == j0;
+  reg u8 cond2 = #SETcc(cond2_b);
+  cond = cond & cond2;
 
-  reg bool b = ans == 1;
-  return b;
+  reg bool ans = cond == 1;
+  return ans;
 }
 
 /* Add {i, pos, vals} to node, assuming that there is a free node element */
