@@ -158,41 +158,6 @@ fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem, r
   return node;
 }
 
-/* So the same memory access that addToNode with out doing nothing */
-fn false_addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem) -> reg ptr u64[K * (2 + b_sz)] {
-
-  _ = nodeElem[0];
-  _ = nodeElem[1];
-  reg ptr u64[b_sz] vals = nodeElem[2: b_sz];
-
-  reg u64 k = 0;
-  while (k < K) {
-    reg u64 pk = k * (2 + b_sz); // start of element k of the node
-    reg ptr u64[2 + b_sz] this_nodeElem = node[pk: 2 + b_sz];
-
-    reg u64 this_i = this_nodeElem[0];
-
-    this_nodeElem[0] = this_i;
-    reg u64 this_pos = this_nodeElem[1];
-    this_nodeElem[1] = this_pos;
-
-    reg u64 j = 0;
-    while (j < b_sz) {
-      reg u64 this_v = this_nodeElem[2 + j];
-      _ = vals[j];
-      this_nodeElem[2 + j] = this_v;
-
-      j = j + 1;
-    }
-
-    node[pk: 2 + b_sz] = this_nodeElem;
-
-    k = k + 1;
-  }
-
-  return node;
-}
-
 /*
   Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram in form (j, k)
 */
@@ -310,24 +275,17 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
       () = #spill(k);
 
       reg u64 i = toAdd[ik];
-      if (i != N) {
-        reg ptr u64[2 + b_sz] this_nodeElem_toAdd = toAdd[ik: 2 + b_sz];
+      reg bool b_cond = i != N;
+      reg u8 cond = #SETcc(b_cond);
 
-        node = node;
-        reg u8 tr = 1;
-        node = addToNode(node, this_nodeElem_toAdd, tr);
-        node = node;
+      reg ptr u64[2 + b_sz] this_nodeElem_toAdd = toAdd[ik: 2 + b_sz];
 
-        toAdd[ik] = N;
-      } else {
-        reg ptr u64[2 + b_sz] this_nodeElem_toAdd = toAdd[ik: 2 + b_sz];
+      node = node;
+      node = addToNode(node, this_nodeElem_toAdd, cond);
+      node = node;
 
-        node = node;
-        node = false_addToNode(node, this_nodeElem_toAdd);
-        node = node;
+      toAdd[ik] = N;
 
-        toAdd[ik] = N;
-      }
 
       () = #unspill(k);
 
@@ -337,12 +295,15 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
     () = #unspill(l);
 
     if (l != 0) {
+      () = #spill(node);
+
       reg u64 next_l = l;
       next_l = next_l - 1;
 
       reg u64 next_ix = ix0;
       next_ix = next_ix >> (next_l & 63);
 
+      () = #unspill(node);
       () = #spill(l);
 
       k = 0;
@@ -355,6 +316,8 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
 
         reg ptr u64[2 + b_sz] this_nodeElem = node[ik: 2 + b_sz];
 
+        () = #spill(node);
+
         reg u64 this_pos_ix = this_pos;
         this_pos_ix += N;
 
@@ -363,14 +326,16 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
         reg u8 cond = #SETcc(cond_b);
         cond = cond & isDes;
 
-        if (cond == 1) {
-          reg u8 tr = 1;
-          toAdd = addToNode(toAdd, this_nodeElem, tr);
-          node[ik] = N;
-        } else {
-          toAdd = false_addToNode(toAdd, this_nodeElem);
-          node[ik] = this_i;
-        }
+        cond_b = cond == 1;
+        toAdd = addToNode(toAdd, this_nodeElem, cond);
+        reg u64 new_i = this_i;
+        cond_b = cond == 1;
+        reg u64 N_reg = N;
+        new_i = N_reg if cond_b;
+
+        () = #unspill(node);
+
+        node[ik] = new_i;
 
         () = #unspill(k);
         k += 1;
