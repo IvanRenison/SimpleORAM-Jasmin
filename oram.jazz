@@ -187,7 +187,6 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
       reg u64 this_i = nodeElem[0];
 
       reg bool cond_b = this_i == i;
-      reg u8 cond = #SETcc(cond_b);
       ans_j = ix if cond_b;
       ans_k = k if cond_b;
 
@@ -199,11 +198,11 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
         reg u64 v = nodeElem[idx];
 
         reg u64 new_res = in_res;
-        in_res = v if cond_b;
+        new_res = v if cond_b;
         reg u64 zero = 0;
         v = zero if cond_b;
 
-        res[idx] = in_res;
+        res[idx] = new_res;
         nodeElem[idx] = v;
 
         idx += 1;
@@ -331,7 +330,6 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
         reg u8 cond = #SETcc(cond_b);
         cond = cond & isDes;
 
-        cond_b = cond == 1;
         toAdd = addToNode(toAdd, this_nodeElem, cond);
         reg u64 new_i = this_i;
         cond_b = cond == 1;
