@@ -96,8 +96,10 @@ inline fn isDesOf(reg u64 j0, reg u64 j1) -> reg u8 { // Is j1 a descendent of j
   return cond;
 }
 
-/* Add {i, pos, vals} to node, assuming that there is a free node element */
-fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem) -> reg ptr u64[K * (2 + b_sz)] {
+/* If real, add {i, pos, vals} to node, assuming that there is a free node element
+   else make all the reads and writes with out doing nothing
+*/
+fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem, reg u8 real) -> reg ptr u64[K * (2 + b_sz)] {
 
   reg u64 i = nodeElem[0];
   reg u64 pos = nodeElem[1];
@@ -109,42 +111,44 @@ fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem) -
     reg u64 pk = k * (2 + b_sz); // start of element k of the node
     reg ptr u64[2 + b_sz] this_nodeElem = node[pk: 2 + b_sz];
 
+    () = #spill(node);
+
     reg u64 this_i = this_nodeElem[0];
 
     reg bool b_cond = this_i == N;
     reg u8 cond = #SETcc(b_cond);
     cond = cond & flag;
+    cond = cond & real;
 
-    if (cond == 1) {
-      this_nodeElem[0] = i;
+    reg u8 not_cond = 1;
+    not_cond = not_cond;
+    not_cond = not_cond - cond;
+    not_cond = not_cond;
+    flag = flag;
+    flag = flag & not_cond;
+    flag = flag;
 
-      _ = this_nodeElem[1];
-      this_nodeElem[1] = pos;
+    b_cond = cond == 1;
 
-      reg u64 j = 0;
-      while (j < b_sz) {
-        _ = this_nodeElem[2 + j];
-        this_nodeElem[2 + j] = vals[j];
+    reg u64 new_i = this_i;
+    new_i = i if b_cond;
+    this_nodeElem[0] = new_i;
+    reg u64 new_pos = this_nodeElem[1];
+    new_pos = pos if b_cond;
+    this_nodeElem[1] = new_pos;
 
-        j = j + 1;
-      }
+    reg u64 j = 0;
+    while (j < b_sz) {
+      b_cond = cond == 1;
+      reg u64 new_v = this_nodeElem[2 + j];
+      reg u64 v = vals[j];
+      new_v = v if b_cond;
+      this_nodeElem[2 + j] = new_v;
 
-      flag = 0;
-
-    } else {
-      this_nodeElem[0] = this_i;
-      reg u64 this_pos = this_nodeElem[1];
-      this_nodeElem[1] = this_pos;
-
-      reg u64 j = 0;
-      while (j < b_sz) {
-        reg u64 this_v = this_nodeElem[2 + j];
-        _ = vals[j];
-        this_nodeElem[2 + j] = this_v;
-
-        j = j + 1;
-      }
+      j = j + 1;
     }
+
+    () = #unspill(node);
 
     node[pk: 2 + b_sz] = this_nodeElem;
 
@@ -302,12 +306,16 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
     reg u64 k = 0;
     while (k < K) { // Add elements in toAdd
       reg u64 ik = k * (2 + b_sz);
+
+      () = #spill(k);
+
       reg u64 i = toAdd[ik];
       if (i != N) {
         reg ptr u64[2 + b_sz] this_nodeElem_toAdd = toAdd[ik: 2 + b_sz];
 
         node = node;
-        node = addToNode(node, this_nodeElem_toAdd);
+        reg u8 tr = 1;
+        node = addToNode(node, this_nodeElem_toAdd, tr);
         node = node;
 
         toAdd[ik] = N;
@@ -320,6 +328,8 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
 
         toAdd[ik] = N;
       }
+
+      () = #unspill(k);
 
       k += 1;
     }
@@ -354,7 +364,8 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
         cond = cond & isDes;
 
         if (cond == 1) {
-          toAdd = addToNode(toAdd, this_nodeElem);
+          reg u8 tr = 1;
+          toAdd = addToNode(toAdd, this_nodeElem, tr);
           node[ik] = N;
         } else {
           toAdd = false_addToNode(toAdd, this_nodeElem);
@@ -415,14 +426,21 @@ fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg
 
     reg ptr u64[K * (2 + b_sz)] root_node = oram[K * (2 + b_sz): K * (2 + b_sz)];
 
-    root_node = addToNode(root_node, nodeElem);
+    () = #spill(i);
+    () = #spill(Pos);
+    () = #spill(oram);
+
+    reg u8 tr = 1;
+    root_node = addToNode(root_node, nodeElem, tr);
+
+    () = #unspill(oram);
 
     oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
 
-    () = #spill(i);
 
     oram = pushDown(oram);
 
+    () = #unspill(Pos);
     () = #unspill(i);
 
     i += 1;
@@ -462,15 +480,23 @@ fn read(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in
   res_p[1] = new_pos;
   Pos[i] = new_pos;
 
+  () = #spill(Pos);
+
   reg ptr u64[K * (2 + b_sz)] root_node = oram[K * (2 + b_sz): K * (2 + b_sz)];
 
+  () = #spill(oram);
+
   res_p = res_p;
-  root_node = addToNode(root_node, res_p);
+  reg u8 tr = 1;
+  root_node = addToNode(root_node, res_p, tr);
+
+  () = #unspill(oram);
 
   oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
 
   oram = pushDown(oram);
 
+  () = #unspill(Pos);
   () = #unspill(ans);
 
   return Pos, oram, ans;
@@ -520,12 +546,20 @@ fn write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 i
 
   reg ptr u64[K * (2 + b_sz)] root_node = oram[K * (2 + b_sz): K * (2 + b_sz)];
 
+  () = #spill(Pos);
+  () = #spill(oram);
+
   res_p = res_p;
-  root_node = addToNode(root_node, res_p);
+  reg u8 tr = 1;
+  root_node = addToNode(root_node, res_p, tr);
+
+  () = #unspill(oram);
 
   oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
 
   oram = pushDown(oram);
+
+  () = #unspill(Pos);
 
   return Pos, oram;
 }
