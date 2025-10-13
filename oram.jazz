@@ -1,6 +1,8 @@
 param int n = 256; // Size of virtual memory
 param int K = 32; // Bucket size
+param int log_b_sz = 2;
 param int b_sz = 4;  // Block size
+// assert(b_sz == 1 << log_b_sz)
 
 param int N = (n + b_sz - 1) / b_sz; // Amount of blocks
 
@@ -30,29 +32,29 @@ fn randombyte() -> reg u64 {
   stack u64[1] buf;
   reg u64 r;
   reg u64 r2;
-  buf = #randombytes(buf);
+  #declassify buf = #randombytes(buf);
   r = buf[0];
-  buf = #randombytes(buf);
+  #declassify buf = #randombytes(buf);
   r2 = buf[0];
   r2 = r2 << 8;
   r = r | r2;
-  buf = #randombytes(buf);
+  #declassify buf = #randombytes(buf);
   r2 = buf[0];
   r2 = r2 << 16;
   r = r | r2;
-  buf = #randombytes(buf);
+  #declassify buf = #randombytes(buf);
   r2 = buf[0];
   r2 = r2 << 24;
   r = r | r2;
-  buf = #randombytes(buf);
+  #declassify buf = #randombytes(buf);
   r2 = buf[0];
   r2 = r2 << 32;
   r = r | r2;
-  buf = #randombytes(buf);
+  #declassify buf = #randombytes(buf);
   r2 = buf[0];
   r2 = r2 << 40;
   r = r | r2;
-  buf = #randombytes(buf);
+  #declassify buf = #randombytes(buf);
   r2 = buf[0];
   r2 = r2 << 48;
   r = r | r2;
@@ -161,11 +163,12 @@ fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem, r
 /*
   Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram in form (j, k)
 */
-fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
+fn fetch(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
 
   reg u64 ans_j = 0;
   reg u64 ans_k = 0;
 
+  #declassify i = i;
   reg u64 ix = Pos[i];
   ix += N;
 
@@ -194,6 +197,8 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
       while (idx < (2 + b_sz)) {
         cond_b = this_i == i;
 
+        () = #spill(i);
+
         reg u64 in_res = res[idx];
         reg u64 v = nodeElem[idx];
 
@@ -206,6 +211,8 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
         nodeElem[idx] = v;
 
         idx += 1;
+
+        () = #unspill(i);
       }
       cond_b = this_i == i;
 
@@ -230,7 +237,7 @@ fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u
 }
 
 export
-fn fetch_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
+fn fetch_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg ptr u64[2 + b_sz] res, #secret reg u64 i) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], #secret reg ptr u64[2 + b_sz], #secret reg u64, #secret reg u64 {
   Pos = Pos; oram = oram; res = res; i = i;
   reg u64 ans_j, ans_k;
   Pos, oram, res, ans_j, ans_k = fetch(Pos, oram, res, i);
@@ -356,7 +363,7 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
 }
 
 export
-fn pushDown_export(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K * (2 + b_sz)] {
+fn pushDown_export(#secret reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
   oram = oram;
   oram = pushDown(oram);
   return oram;
@@ -365,7 +372,7 @@ fn pushDown_export(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * 
 /*
 Initialize a one level ORAM
 */
-fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+fn initORAM(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
   reg u64 N2K = N * 2 * K;
 
   reg u64 ix = 0;
@@ -418,7 +425,7 @@ fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg
 }
 
 export
-fn initORAM_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+fn initORAM_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
   Pos = Pos; oram = oram;
   Pos, oram = initORAM(Pos, oram);
   return Pos, oram;
@@ -427,17 +434,25 @@ fn initORAM_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram)
 
 fn read(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
   reg u64 i = in;
-  reg u64 b_sz_reg = b_sz;
-  i /= b_sz_reg;
+  i = i >> log_b_sz; // i /= b_sz
   i = i;
   reg u64 j = in;
-  j %= b_sz_reg;
+  j = j & (b_sz - 1); // j %= b_sz
 
   stack u64[2 + b_sz] res;
   reg ptr u64[2 + b_sz] res_p = res;
 
   Pos, oram, res_p, _, _ = fetch(Pos, oram, res_p, i);
-  reg u64 ans = res_p[2 + j];
+
+  reg u64 ans = 0;
+  reg u64 ji = 0;
+  while (ji < b_sz) {
+    reg u64 v = res_p[2 + ji];
+    reg bool cond_b = ji == j;
+    ans = v if cond_b;
+
+    ji += 1;
+  }
 
   () = #spill(ans);
 
@@ -446,6 +461,7 @@ fn read(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in
   new_pos = new_pos;
 
   res_p[1] = new_pos;
+  #declassify i = i;
   Pos[i] = new_pos;
 
   () = #spill(Pos);
@@ -471,7 +487,7 @@ fn read(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in
 }
 
 export
-fn read_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
+fn read_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg u64 in) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], #secret reg u64 {
   Pos = Pos; oram = oram; in = in;
   reg u64 ans;
   Pos, oram, ans = read(Pos, oram, in);
@@ -481,16 +497,10 @@ fn read_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg
 
 fn write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in, reg u64 v) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
   reg u64 i = in;
-  i = i;
-  reg u64 b_sz_reg = b_sz;
-  b_sz_reg = b_sz_reg;
-  i /= b_sz_reg;
+  i = i >> log_b_sz; // i /= b_sz
   i = i;
   reg u64 j = in;
-  j = j;
-  b_sz_reg = b_sz_reg;
-  j %= b_sz_reg;
-  j = j;
+  j = j & (b_sz - 1); // j %= b_sz
 
   stack u64[2 + b_sz] res;
   reg ptr u64[2 + b_sz] res_p = res;
@@ -502,15 +512,35 @@ fn write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 i
 
   () = #unspill(j);
   () = #unspill(v);
+  () = #spill(oram);
+  () = #spill(Pos);
 
-  res_p[2 + j] = v;
+  reg u64 ji = 0;
+  while (ji < b_sz) {
+    reg u64 new_v = res_p[2 + ji];
+    reg bool cond_b = ji == j;
+    new_v = v if cond_b;
+    res_p[2 + ji] = new_v;
+
+    ji += 1;
+  }
+
+  () = #spill(res_p);
+  () = #spill(i);
 
   reg u64 N_reg = N;
   reg u64 new_pos = random(N_reg);
   new_pos = new_pos;
 
+  () = #unspill(i);
+  () = #unspill(res_p);
+
   res_p[1] = new_pos;
+  #declassify i = i;
+  () = #unspill(Pos);
   Pos[i] = new_pos;
+
+  () = #unspill(oram);
 
   reg ptr u64[K * (2 + b_sz)] root_node = oram[K * (2 + b_sz): K * (2 + b_sz)];
 
@@ -533,7 +563,7 @@ fn write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 i
 }
 
 export
-fn write_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in, reg u64 v) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+fn write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg u64 in, #secret reg u64 v) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
   Pos = Pos; oram = oram; in = in; v = v;
   Pos, oram = write(Pos, oram, in, v);
   Pos = Pos; oram = oram;
