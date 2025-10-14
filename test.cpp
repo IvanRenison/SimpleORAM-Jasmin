@@ -5,6 +5,7 @@
 #define _GLIBCXX_SANITIZE_VECTOR 1
 #include <bits/stdc++.h>
 using namespace std;
+typedef uint8_t u8;
 typedef int64_t ll;
 typedef uint64_t ull;
 
@@ -17,8 +18,7 @@ const ull N = (n + b_sz - 1) / b_sz; // Amount of blocks
 extern "C" void initORAM_export(ull* Pos, ull* oram);
 extern "C" pair<ull, ull> fetch_export(ull* Pos, ull* oram, ull* res, ull i);
 extern "C" void pushDown_export(ull* oram);
-extern "C" ull read_export(ull* Pos, ull* oram, ull in);
-extern "C" void write_export(ull* Pos, ull* oram, ull in, ull v);
+extern "C" ull read_write_export(ull* Pos, ull* oram, ull in, ull v, u8 ty);
 
 struct NodeElem {
   ull i; // This node has the information of block i, or N to indicate invalid NodeElem
@@ -147,7 +147,7 @@ void test_empty_read(ull* Pos, ull* oram_, array<ull, n> real_mem) {
   for (ull it = 0; it < 100; it++) {
     ull in = rand() % n;
 
-    ull val = read_export(Pos, oram_, in);
+    ull val = read_write_export(Pos, oram_, in, 0, 0);
     assert(val == 0);
 
     assert(checkInvariant(Pos, oram_, real_mem));
@@ -197,16 +197,20 @@ int main() {
       ull t = rand() % 2;
 
       if (t) { // Read
-        ull v = read_export(Pos, oram_, in);
+        ull v = read_write_export(Pos, oram_, in, 0, 0);
         assert(v == mem[in]);
         assert(checkInvariant(Pos, oram_, mem));
       } else { // Write
         ull v = rand();
-        write_export(Pos, oram_, in, v);
+        ull v2 = read_write_export(Pos, oram_, in, v, 1);
+        assert(v2 == mem[in]);
         mem[in] = v;
         assert(checkInvariant(Pos, oram_, mem));
       }
     }
+
+    delete[] oram;
+    delete[] Pos;
   }
 
 }

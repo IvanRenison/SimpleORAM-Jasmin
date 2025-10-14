@@ -6,6 +6,7 @@ param int b_sz = 4;  // Block size
 
 param int N = (n + b_sz - 1) / b_sz; // Amount of blocks
 
+param int N_queries = 100; // Amount of queries for multiquery operation
 
 /*
 Variable names convention:
@@ -431,71 +432,8 @@ fn initORAM_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (
   return Pos, oram;
 }
 
-
-fn read(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
-  reg u64 i = in;
-  i = i >> log_b_sz; // i /= b_sz
-  i = i;
-  reg u64 j = in;
-  j = j & (b_sz - 1); // j %= b_sz
-
-  stack u64[2 + b_sz] res;
-  reg ptr u64[2 + b_sz] res_p = res;
-
-  Pos, oram, res_p, _, _ = fetch(Pos, oram, res_p, i);
-
-  reg u64 ans = 0;
-  reg u64 ji = 0;
-  while (ji < b_sz) {
-    reg u64 v = res_p[2 + ji];
-    reg bool cond_b = ji == j;
-    ans = v if cond_b;
-
-    ji += 1;
-  }
-
-  () = #spill(ans);
-
-  reg u64 N_reg = N;
-  reg u64 new_pos = random(N_reg);
-  new_pos = new_pos;
-
-  res_p[1] = new_pos;
-  #declassify i = i;
-  Pos[i] = new_pos;
-
-  () = #spill(Pos);
-
-  reg ptr u64[K * (2 + b_sz)] root_node = oram[K * (2 + b_sz): K * (2 + b_sz)];
-
-  () = #spill(oram);
-
-  res_p = res_p;
-  reg u8 tr = 1;
-  root_node = addToNode(root_node, res_p, tr);
-
-  () = #unspill(oram);
-
-  oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
-
-  oram = pushDown(oram);
-
-  () = #unspill(Pos);
-  () = #unspill(ans);
-
-  return Pos, oram, ans;
-}
-
-export
-fn read_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg u64 in) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], #secret reg u64 {
-  Pos = Pos; oram = oram; in = in;
-  reg u64 ans;
-  Pos, oram, ans = read(Pos, oram, in);
-  Pos = Pos; oram = oram;
-  return Pos, oram, ans;
-}
-
-fn write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in, reg u64 v) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)] {
+// Read and optionally write (write only if wr)
+fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in, reg u64 v, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
   reg u64 i = in;
   i = i >> log_b_sz; // i /= b_sz
   i = i;
@@ -507,24 +445,32 @@ fn write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 i
 
   () = #spill(j);
   () = #spill(v);
+  () = #spill(wr);
 
   Pos, oram, res_p, _, _ = fetch(Pos, oram, res_p, i);
 
+  () = #unspill(wr);
   () = #unspill(j);
   () = #unspill(v);
   () = #spill(oram);
   () = #spill(Pos);
 
+  reg u64 ans;
   reg u64 ji = 0;
   while (ji < b_sz) {
     reg u64 new_v = res_p[2 + ji];
     reg bool cond_b = ji == j;
-    new_v = v if cond_b;
+    ans = new_v if cond_b;
+    reg u8 cond = #SETcc(cond_b);
+    reg u8 write = cond & wr;
+    reg bool write_b = write == 1;
+    new_v = v if write_b;
     res_p[2 + ji] = new_v;
 
     ji += 1;
   }
 
+  () = #spill(ans);
   () = #spill(res_p);
   () = #spill(i);
 
@@ -558,14 +504,16 @@ fn write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 i
   oram = pushDown(oram);
 
   () = #unspill(Pos);
+  () = #unspill(ans);
 
-  return Pos, oram;
+  return Pos, oram, ans;
 }
 
 export
-fn write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg u64 in, #secret reg u64 v) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
-  Pos = Pos; oram = oram; in = in; v = v;
-  Pos, oram = write(Pos, oram, in, v);
-  Pos = Pos; oram = oram;
-  return Pos, oram;
+fn read_write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg u64 in, #secret reg u64 v, #secret reg u8 wr) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
+  Pos = Pos; oram = oram; in = in; v = v; wr = wr;
+  reg u64 ans;
+  Pos, oram, ans = read_write(Pos, oram, in, v, wr);
+  Pos = Pos; oram = oram; ans = ans;
+  return Pos, oram, ans;
 }
