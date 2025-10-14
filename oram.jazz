@@ -3,10 +3,10 @@ param int K = 32; // Bucket size
 param int log_b_sz = 2;
 param int b_sz = 4;  // Block size
 // assert(b_sz == 1 << log_b_sz)
+param int N_queries = 100; // Amount of queries for multi-query operation
 
 param int N = (n + b_sz - 1) / b_sz; // Amount of blocks
 
-param int N_queries = 100; // Amount of queries for multiquery operation
 
 /*
 Variable names convention:
@@ -517,3 +517,45 @@ fn read_write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K *
   Pos = Pos; oram = oram; ans = ans;
   return Pos, oram, ans;
 }
+
+fn multiQuery(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * (1 + 1 + 1)] queries, reg ptr u64 [N_queries] ans) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries] {
+
+  reg u64 q = 0;
+  while (q < N_queries) {
+    reg u64 q3 = q;
+
+    () = #spill(q);
+    () = #spill(ans);
+
+    q3 *= 3;
+    reg u64 t = queries[q3];
+    reg u64 i = queries[q3 + 1];
+    reg u64 v = queries[q3 + 2];
+
+    () = #spill(queries);
+
+
+    reg u64 a;
+
+    Pos, oram, a = read_write(Pos, oram, i, v, t);
+
+    () = #unspill(queries);
+    () = #unspill(ans);
+    () = #unspill(q);
+
+    ans[q] = a;
+
+    q += 1;
+  }
+
+  return Pos, oram, ans;
+}
+
+export
+fn multiQuery_export(#public reg ptr u64[N] Pos, #private reg ptr u64[2 * N * K * (2 + b_sz)] oram, #private reg ptr u64 [N_queries] ans, #private reg ptr u64 [N_queries * (1 + 1 + 1)] queries) -> #public reg ptr u64[N], #private reg ptr u64[2 * N * K * (2 + b_sz)], #private reg ptr u64 [N_queries] {
+  Pos = Pos; oram = oram; ans = ans; queries = queries;
+  Pos, oram, ans = multiQuery(Pos, oram, queries, ans);
+  Pos = Pos; oram = oram; ans = ans;
+  return Pos, oram, ans;
+}
+

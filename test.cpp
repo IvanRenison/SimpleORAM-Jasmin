@@ -12,6 +12,7 @@ typedef uint64_t ull;
 const ull n = 256; // Size of virtual memory
 const ull K = 32; // Bucket size
 const ull b_sz = 4; // Block size
+const ull N_queries = 100; // Amount of queries for multi-query operation
 
 const ull N = (n + b_sz - 1) / b_sz; // Amount of blocks
 
@@ -19,6 +20,14 @@ extern "C" void initORAM_export(ull* Pos, ull* oram);
 extern "C" pair<ull, ull> fetch_export(ull* Pos, ull* oram, ull* res, ull i);
 extern "C" void pushDown_export(ull* oram);
 extern "C" ull read_write_export(ull* Pos, ull* oram, ull in, ull v, u8 ty);
+
+struct Query {
+  ull ty; // 0 for read, 1 for read and write
+  ull in; // index in the virtual memory
+  ull v; // value to write if ty = 1
+} __attribute__((packed));
+
+extern "C" void multiQuery_export(ull* Pos, ull* oram, ull* ans, Query* queries);
 
 struct NodeElem {
   ull i; // This node has the information of block i, or N to indicate invalid NodeElem
@@ -211,6 +220,53 @@ int main() {
 
     delete[] oram;
     delete[] Pos;
+  }
+
+  cerr << "Second part done" << endl;
+
+  for (ull tc = 0; tc < 100; tc++) {
+    cerr << tc << endl;
+
+    Node* oram = new Node[2 * N];
+    ull* oram_ = (ull*)oram;
+    ull* Pos = new ull[N];
+
+    array<ull, n> mem = {0};
+
+    initORAM_export(Pos, oram_);
+    assert(checkInvariant(Pos, oram_, mem));
+
+    Query* queries = new Query[N_queries];
+    ull* ans = new ull[N_queries];
+    ull* real_ans = new ull[N_queries];
+
+    for (ull q = 0; q < N_queries; q++) {
+      ull in = rand() % n;
+
+      ull t = rand() % 2;
+
+      if (t) { // Read
+        queries[q] = {0, in, 0};
+        real_ans[q] = mem[in];
+      } else { // Write
+        ull v = rand();
+        queries[q] = {1, in, v};
+        real_ans[q] = mem[in];
+        mem[in] = v;
+      }
+    }
+
+    multiQuery_export(Pos, oram_, ans, queries);
+    assert(checkInvariant(Pos, oram_, mem));
+    for (ull q = 0; q < N_queries; q++) {
+      assert(ans[q] == real_ans[q]);
+    }
+
+    delete[] oram;
+    delete[] Pos;
+    delete[] queries;
+    delete[] ans;
+    delete[] real_ans;
   }
 
 }
