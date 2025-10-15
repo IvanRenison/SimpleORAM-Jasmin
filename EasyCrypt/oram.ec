@@ -1,14 +1,15 @@
-pragma Goals : printall.
 require import AllCore IntDiv CoreMap List Distr.
 
 from Jasmin require import JModel_x86.
 
 import SLH64.
 
+from Jasmin require import JLeakage.
+
 require import
-Array1 Array4 Array6 Array64 Array192 Array24576 BArray8 BArray32 BArray48
-BArray512 BArray1536 BArray196608 SBArray48_32 SBArray1536_48
-  SBArray196608_1536.
+Array1 Array4 Array6 Array64 Array100 Array192 Array300 Array24576 BArray8
+BArray32 BArray48 BArray512 BArray800 BArray1536 BArray2400 BArray196608
+SBArray48_32 SBArray1536_48 SBArray196608_1536.
 
 module type Syscall_t = {
   proc randombytes_8 (_:BArray8.t) : BArray8.t
@@ -16,62 +17,76 @@ module type Syscall_t = {
 
 module Syscall : Syscall_t = {
   proc randombytes_8 (a:BArray8.t) : BArray8.t = {
-
+    
     a <$ BArray8.darray;
     return a;
   }
 }.
 
 module M(SC:Syscall_t) = {
-  proc randombyte () : W64.t = {
+  proc randombyte () : JLeakage.leakage * W64.t = {
     var aux:BArray8.t;
+    var leak:JLeakage.leakages;
     var r:W64.t;
     var buf:BArray8.t;
     var r2:W64.t;
     buf <- witness;
+    leak <- [];
     aux <@ SC.randombytes_8 (buf);
     buf <- aux;
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     r <- (BArray8.get64 buf 0);
     aux <@ SC.randombytes_8 (buf);
     buf <- aux;
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     r2 <- (BArray8.get64 buf 0);
     r2 <- (r2 `<<` (W8.of_int 8));
     r <- (r `|` r2);
     aux <@ SC.randombytes_8 (buf);
     buf <- aux;
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     r2 <- (BArray8.get64 buf 0);
     r2 <- (r2 `<<` (W8.of_int 16));
     r <- (r `|` r2);
     aux <@ SC.randombytes_8 (buf);
     buf <- aux;
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     r2 <- (BArray8.get64 buf 0);
     r2 <- (r2 `<<` (W8.of_int 24));
     r <- (r `|` r2);
     aux <@ SC.randombytes_8 (buf);
     buf <- aux;
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     r2 <- (BArray8.get64 buf 0);
     r2 <- (r2 `<<` (W8.of_int 32));
     r <- (r `|` r2);
     aux <@ SC.randombytes_8 (buf);
     buf <- aux;
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     r2 <- (BArray8.get64 buf 0);
     r2 <- (r2 `<<` (W8.of_int 40));
     r <- (r `|` r2);
     aux <@ SC.randombytes_8 (buf);
     buf <- aux;
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     r2 <- (BArray8.get64 buf 0);
     r2 <- (r2 `<<` (W8.of_int 48));
     r <- (r `|` r2);
-    return r;
+    return ((LeakList leak), r);
   }
-  proc random (x:W64.t) : W64.t = {
+  proc random (x:W64.t) : JLeakage.leakage * W64.t = {
+    var leak:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
     var ans:W64.t;
-    ans <@ randombyte ();
+    leak <- [];
+    (leak_c, ans) <@ randombyte ();
+    leak <- (leak ++ [leak_c]);
     ans <- ans;
     ans <- (ans \umod x);
-    return ans;
+    return ((LeakList leak), ans);
   }
-  proc bSR (x:W64.t) : W64.t = {
+  proc bSR (x:W64.t) : JLeakage.leakage * W64.t = {
+    var leak:JLeakage.leakages;
     var ans:W64.t;
     var aux:W64.t;
     var  _0:bool;
@@ -79,36 +94,49 @@ module M(SC:Syscall_t) = {
     var  _2:bool;
     var  _3:bool;
     var  _4:bool;
+    leak <- [];
     x <- x;
     ( _0,  _1,  _2,  _3,  _4, ans) <- (LZCNT_64 x);
     aux <- (W64.of_int 63);
     ans <- (aux - ans);
     ans <- ans;
-    return ans;
+    return ((LeakList leak), ans);
   }
-  proc isDesOf (j0:W64.t, j1:W64.t) : bool = {
-    var b:bool;
-    var ans:W64.t;
+  proc isDesOf (j0:W64.t, j1:W64.t) : JLeakage.leakage * W8.t = {
+    var leak:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    var cond:W8.t;
     var bitsj0:W64.t;
     var bitsj1:W64.t;
     var diff:W64.t;
     var j2:W64.t;
-    var one:W64.t;
-    ans <- (W64.of_int 0);
-    if ((j0 \ult j1)) {
-      bitsj0 <@ bSR (j0);
-      bitsj1 <@ bSR (j1);
-      diff <- (bitsj1 - bitsj0);
-      j2 <- (j1 `>>` (truncateu8 (diff `&` (W64.of_int 63))));
-      one <- (W64.of_int 1);
-      ans <- ((j2 = j0) ? one : ans);
-    } else {
-
-    }
-    b <- (ans = (W64.of_int 1));
-    return b;
+    var cond_b:bool;
+    var cond2_b:bool;
+    var cond2:W8.t;
+    leak <- [];
+    (leak_c, bitsj0) <@ bSR (j0);
+    leak <- (leak ++ [leak_c]);
+    (leak_c, bitsj1) <@ bSR (j1);
+    leak <- (leak ++ [leak_c]);
+    diff <- (bitsj1 - bitsj0);
+    j2 <- j1;
+    j2 <- (j2 `>>` (truncateu8 (diff `&` (W64.of_int 63))));
+    cond_b <- (j0 \ult j1);
+    cond <- (SETcc cond_b);
+    cond2_b <- (j2 = j0);
+    cond2 <- (SETcc cond2_b);
+    cond <- (cond `&` cond2);
+    return ((LeakList leak), cond);
   }
-  proc addToNode (node:BArray1536.t, nodeElem:BArray48.t) : BArray1536.t * W64.t list * W64.t list = {
+  proc addToNode (node:BArray1536.t, nodeElem:BArray48.t, real:W8.t) : 
+  JLeakage.leakage * BArray1536.t = {
+    var _b:JLeakage.leakages;
+    var _b_0:JLeakage.leakages;
+    var leak:JLeakage.leakages;
+    var leak_0:JLeakage.leakages;
+    var leak_1:JLeakage.leakages;
+    var leak_cond:JLeakage.leakages;
+    var leak_cond_0:JLeakage.leakages;
     var i:W64.t;
     var pos:W64.t;
     var vals:BArray32.t;
@@ -119,137 +147,109 @@ module M(SC:Syscall_t) = {
     var this_i:W64.t;
     var b_cond:bool;
     var cond:W8.t;
-    var this_pos:W64.t;
+    var not_cond:W8.t;
+    var new_i:W64.t;
+    var new_pos:W64.t;
     var j:W64.t;
-    var this_v:W64.t;
-    var j_0:W64.t;
-    var  _0:W64.t;
-    var  _1:W64.t;
-    var node_leakage:W64.t list;
-    var nodeElem_leakage:W64.t list;
-    node_leakage <- [];
-    nodeElem_leakage <- [];
+    var new_v:W64.t;
+    var v:W64.t;
     this_nodeElem <- witness;
     vals <- witness;
+    leak <- [];
+    leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
     i <- (BArray48.get64 nodeElem 0);
-    nodeElem_leakage <- W64.of_int 0 :: nodeElem_leakage;
+    leak <- (leak ++ [(LeakList [(Leak_int 1)])]);
     pos <- (BArray48.get64 nodeElem 1);
-    nodeElem_leakage <- W64.of_int 1 :: nodeElem_leakage;
+    leak <- (leak ++ [(LeakList [(Leak_int 2)])]);
     vals <- (SBArray48_32.get_sub64 nodeElem 2);
-    nodeElem_leakage <- W64.of_int 2 :: nodeElem_leakage;
     k <- (W64.of_int 0);
     flag <- (W8.of_int 1);
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <-
+    (leak_cond ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
     while ((k \ult (W64.of_int 32))) {
+      leak_0 <- [];
       pk <- (k * (W64.of_int (2 + 4)));
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pk))])]);
       this_nodeElem <- (SBArray1536_48.get_sub64 node (W64.to_uint pk));
+      (* Erased call to spill *)
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int 0)])]);
       this_i <- (BArray48.get64 this_nodeElem 0);
-      node_leakage <- (pk + W64.of_int 0) :: node_leakage;
-      b_cond <- (this_i = (W64.of_int (((200 + 4) - 1) %/ 4)));
+      b_cond <- (this_i = (W64.of_int (((256 + 4) - 1) %/ 4)));
       cond <- (SETcc b_cond);
       cond <- (cond `&` flag);
-      if ((cond = (W8.of_int 1))) {
-        this_nodeElem <- (BArray48.set64 this_nodeElem 0 i);
-        node_leakage <- (pk + W64.of_int 0) :: node_leakage;
-         _0 <- (BArray48.get64 this_nodeElem 1);
-        node_leakage <- (pk + W64.of_int 1) :: node_leakage;
-        this_nodeElem <- (BArray48.set64 this_nodeElem 1 pos);
-        node_leakage <- (pk + W64.of_int 1) :: node_leakage;
-        j_0 <- (W64.of_int 0);
-        while ((j_0 \ult (W64.of_int 4))) {
-           _1 <-
-          (BArray48.get64 this_nodeElem (W64.to_uint ((W64.of_int 2) + j_0)));
-          node_leakage <- (pk + W64.of_int 2 + j_0) :: node_leakage;
-          this_nodeElem <-
-          (BArray48.set64 this_nodeElem (W64.to_uint ((W64.of_int 2) + j_0))
-          (BArray32.get64 vals (W64.to_uint j_0)));
-          node_leakage <- (pk + W64.of_int 2 + j_0) :: node_leakage;
-          nodeElem_leakage <- (W64.of_int 2 + j_0) :: node_leakage;
-          j_0 <- (j_0 + (W64.of_int 1));
-        }
-        flag <- (W8.of_int 0);
-      } else {
-        this_nodeElem <- (BArray48.set64 this_nodeElem 0 this_i);
-        node_leakage <- (pk + W64.of_int 0) :: node_leakage;
-        this_pos <- (BArray48.get64 this_nodeElem 1);
-        node_leakage <- (pk + W64.of_int 1) :: node_leakage;
-        this_nodeElem <- (BArray48.set64 this_nodeElem 1 this_pos);
-        node_leakage <- (pk + W64.of_int 1) :: node_leakage;
-        j <- (W64.of_int 0);
-        while ((j \ult (W64.of_int 4))) {
-          this_v <-
-          (BArray48.get64 this_nodeElem (W64.to_uint ((W64.of_int 2) + j)));
-          node_leakage <- (pk + W64.of_int 2 + j) :: node_leakage;
-           _0 <- (BArray32.get64 vals (W64.to_uint j));
-          nodeElem_leakage <- (W64.of_int 2 + j) :: node_leakage;
-          this_nodeElem <-
-          (BArray48.set64 this_nodeElem (W64.to_uint ((W64.of_int 2) + j))
-          this_v);
-          node_leakage <- (pk + W64.of_int 2 + j) :: node_leakage;
-          j <- (j + (W64.of_int 1));
-        }
-      }
-      node <- (SBArray1536_48.set_sub64 node (W64.to_uint pk) this_nodeElem);
-      k <- (k + (W64.of_int 1));
-    }
-    return (node, node_leakage, nodeElem_leakage);
-  }
-  proc false_addToNode (node:BArray1536.t, nodeElem:BArray48.t) : BArray1536.t * W64.t list * W64.t list = {
-    var vals:BArray32.t;
-    var k:W64.t;
-    var pk:W64.t;
-    var this_nodeElem:BArray48.t;
-    var this_i:W64.t;
-    var this_pos:W64.t;
-    var j:W64.t;
-    var this_v:W64.t;
-    var  _0:W64.t;
-    var  _1:W64.t;
-    var  _2:W64.t;
-    var node_leakage:W64.t list;
-    var nodeElem_leakage:W64.t list;
-    node_leakage <- [];
-    nodeElem_leakage <- [];
-    this_nodeElem <- witness;
-    vals <- witness;
-     _0 <- (BArray48.get64 nodeElem 0);
-    nodeElem_leakage <- W64.of_int 0 :: nodeElem_leakage;
-     _1 <- (BArray48.get64 nodeElem 1);
-    nodeElem_leakage <- W64.of_int 1 :: nodeElem_leakage;
-    vals <- (SBArray48_32.get_sub64 nodeElem 2);
-    nodeElem_leakage <- W64.of_int 2 :: nodeElem_leakage;
-    k <- (W64.of_int 0);
-    while ((k \ult (W64.of_int 32))) {
-      pk <- (k * (W64.of_int (2 + 4)));
-      this_nodeElem <- (SBArray1536_48.get_sub64 node (W64.to_uint pk));
-      this_i <- (BArray48.get64 this_nodeElem 0);
-      node_leakage <- (pk + W64.of_int 0) :: node_leakage;
-      this_nodeElem <- (BArray48.set64 this_nodeElem 0 this_i);
-      node_leakage <- (pk + W64.of_int 0) :: node_leakage;
-      this_pos <- (BArray48.get64 this_nodeElem 1);
-      node_leakage <- (pk + W64.of_int 1) :: node_leakage;
-      this_nodeElem <- (BArray48.set64 this_nodeElem 1 this_pos);
-      node_leakage <- (pk + W64.of_int 1) :: node_leakage;
+      cond <- (cond `&` real);
+      not_cond <- (W8.of_int 1);
+      not_cond <- not_cond;
+      not_cond <- (not_cond - cond);
+      not_cond <- not_cond;
+      flag <- flag;
+      flag <- (flag `&` not_cond);
+      flag <- flag;
+      b_cond <- (cond = (W8.of_int 1));
+      new_i <- this_i;
+      new_i <- (b_cond ? i : new_i);
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int 0)])]);
+      this_nodeElem <- (BArray48.set64 this_nodeElem 0 new_i);
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int 1)])]);
+      new_pos <- (BArray48.get64 this_nodeElem 1);
+      new_pos <- (b_cond ? pos : new_pos);
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int 1)])]);
+      this_nodeElem <- (BArray48.set64 this_nodeElem 1 new_pos);
       j <- (W64.of_int 0);
+      leak_cond_0 <- [];
+      _b_0 <- [];
+      leak_cond_0 <-
+      (leak_cond_0 ++ [(LeakList [(Leak_bool (j \ult (W64.of_int 4)))])]);
       while ((j \ult (W64.of_int 4))) {
-        this_v <-
+        leak_1 <- [];
+        b_cond <- (cond = (W8.of_int 1));
+        leak_1 <-
+        (leak_1 ++
+        [(LeakList [(Leak_int (W64.to_uint ((W64.of_int 2) + j)))])]);
+        new_v <-
         (BArray48.get64 this_nodeElem (W64.to_uint ((W64.of_int 2) + j)));
-        node_leakage <- (pk + W64.of_int 2 + j) :: node_leakage;
-         _2 <- (BArray32.get64 vals (W64.to_uint j));
-        nodeElem_leakage <- (W64.of_int 2 + j) :: node_leakage;
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint j))])]);
+        v <- (BArray32.get64 vals (W64.to_uint j));
+        new_v <- (b_cond ? v : new_v);
+        leak_1 <-
+        (leak_1 ++
+        [(LeakList [(Leak_int (W64.to_uint ((W64.of_int 2) + j)))])]);
         this_nodeElem <-
         (BArray48.set64 this_nodeElem (W64.to_uint ((W64.of_int 2) + j))
-        this_v);
-        node_leakage <- (pk + W64.of_int 2 + j) :: node_leakage;
+        new_v);
         j <- (j + (W64.of_int 1));
+        _b_0 <- (_b_0 ++ [(LeakList leak_1)]);
+        leak_cond_0 <-
+        (leak_cond_0 ++ [(LeakList [(Leak_bool (j \ult (W64.of_int 4)))])]);
       }
+      leak_0 <-
+      (leak_0 ++ [(LeakList [(LeakList leak_cond_0); (LeakList _b_0)])]);
+      (* Erased call to unspill *)
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pk))])]);
       node <- (SBArray1536_48.set_sub64 node (W64.to_uint pk) this_nodeElem);
       k <- (k + (W64.of_int 1));
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <-
+      (leak_cond ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
     }
-    return (node, node_leakage, nodeElem_leakage);
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    return ((LeakList leak), node);
   }
-
-  proc fetch(pos:BArray512.t, oram:BArray196608.t, res_0:BArray48.t, i:W64.t) :
-      BArray512.t * BArray196608.t * BArray48.t * W64.t * W64.t * W64.t list * W64.t list = {
+  proc fetch (pos:BArray512.t, oram:BArray196608.t, res_0:BArray48.t, i:W64.t) : 
+  JLeakage.leakage * BArray512.t * BArray196608.t * BArray48.t * W64.t *
+  W64.t = {
+    var _b:JLeakage.leakages;
+    var _b_0:JLeakage.leakages;
+    var _b_1:JLeakage.leakages;
+    var leak:JLeakage.leakages;
+    var leak_0:JLeakage.leakages;
+    var leak_1:JLeakage.leakages;
+    var leak_2:JLeakage.leakages;
+    var leak_cond:JLeakage.leakages;
+    var leak_cond_0:JLeakage.leakages;
+    var leak_cond_1:JLeakage.leakages;
     var ans_j:W64.t;
     var ans_k:W64.t;
     var ix:W64.t;
@@ -259,79 +259,134 @@ module M(SC:Syscall_t) = {
     var pk:W64.t;
     var nodeElem:BArray48.t;
     var this_i:W64.t;
+    var cond_b:bool;
     var idx:W64.t;
     var in_res:W64.t;
     var v:W64.t;
-    var idx_0:W64.t;
-    var v_0:W64.t;
-    var  _0:W64.t;
-    var oram_leakage:W64.t list;
-    var res_0_leakage:W64.t list;
-    oram_leakage <- [];
-    res_0_leakage <- [];
+    var new_res:W64.t;
+    var zero:W64.t;
+    var new_i:W64.t;
+    var n_reg:W64.t;
     node <- witness;
     nodeElem <- witness;
+    leak <- [];
     ans_j <- (W64.of_int 0);
     ans_k <- (W64.of_int 0);
+    i <- i;
+    leak <- (leak ++ [(LeakList [(Leak_int (W64.to_uint i))])]);
     ix <- (BArray512.get64 pos (W64.to_uint i));
-    ix <- (ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
+    ix <- (ix + (W64.of_int (((256 + 4) - 1) %/ 4)));
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <-
+    (leak_cond ++ [(LeakList [(Leak_bool ((W64.of_int 0) \ult ix))])]);
     while (((W64.of_int 0) \ult ix)) {
+      leak_0 <- [];
       pi <- ix;
       pi <- (pi * (W64.of_int (32 * (2 + 4))));
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pi))])]);
       node <- (SBArray196608_1536.get_sub64 oram (W64.to_uint pi));
+      (* Erased call to spill *)
       k <- (W64.of_int 0);
+      leak_cond_0 <- [];
+      _b_0 <- [];
+      leak_cond_0 <-
+      (leak_cond_0 ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
       while ((k \ult (W64.of_int 32))) {
+        leak_1 <- [];
         pk <- (k * (W64.of_int (2 + 4)));
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint pk))])]);
         nodeElem <- (SBArray1536_48.get_sub64 node (W64.to_uint pk));
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int 0)])]);
         this_i <- (BArray48.get64 nodeElem 0);
-        oram_leakage <- (pi + pk + W64.of_int 0) :: oram_leakage;
-        if ((this_i = i)) {
-          ans_j <- ix;
-          ans_k <- k;
-          idx_0 <- (W64.of_int 0);
-          while ((idx_0 \ult (W64.of_int (2 + 4)))) {
-             _0 <- (BArray48.get64 res_0 (W64.to_uint idx_0));
-            res_0_leakage <- idx_0 :: res_0_leakage;
-            v_0 <- (BArray48.get64 nodeElem (W64.to_uint idx_0));
-            oram_leakage <- (pi + pk + idx_0) :: oram_leakage;
-            res_0 <- (BArray48.set64 res_0 (W64.to_uint idx_0) v_0);
-            res_0_leakage <- idx_0 :: res_0_leakage;
-            if ((idx_0 = (W64.of_int 0))) {
-              nodeElem <-
-              (BArray48.set64 nodeElem (W64.to_uint idx_0)
-              (W64.of_int (((200 + 4) - 1) %/ 4)));
-              oram_leakage <- (pi + pk + idx_0) :: oram_leakage;
-            } else {
-              nodeElem <-
-              (BArray48.set64 nodeElem (W64.to_uint idx_0) (W64.of_int 0));
-              oram_leakage <- (pi + pk + idx_0) :: oram_leakage;
-            }
-            idx_0 <- (idx_0 + (W64.of_int 1));
-          }
-        } else {
-          idx <- (W64.of_int 0);
-          while ((idx \ult (W64.of_int (2 + 4)))) {
-            in_res <- (BArray48.get64 res_0 (W64.to_uint idx));
-            res_0_leakage <- idx :: res_0_leakage;
-            v <- (BArray48.get64 nodeElem (W64.to_uint idx));
-            oram_leakage <- (pi + pk + idx) :: oram_leakage;
-            res_0 <- (BArray48.set64 res_0 (W64.to_uint idx) in_res);
-            res_0_leakage <- idx :: res_0_leakage;
-            nodeElem <- (BArray48.set64 nodeElem (W64.to_uint idx) v);
-            oram_leakage <- (pi + pk + idx) :: oram_leakage;
-            idx <- (idx + (W64.of_int 1));
-          }
+        cond_b <- (this_i = i);
+        ans_j <- (cond_b ? ix : ans_j);
+        ans_k <- (cond_b ? k : ans_k);
+        idx <- (W64.of_int 0);
+        leak_cond_1 <- [];
+        _b_1 <- [];
+        leak_cond_1 <-
+        (leak_cond_1 ++
+        [(LeakList [(Leak_bool (idx \ult (W64.of_int (2 + 4))))])]);
+        while ((idx \ult (W64.of_int (2 + 4)))) {
+          leak_2 <- [];
+          cond_b <- (this_i = i);
+          (* Erased call to spill *)
+          leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint idx))])]);
+          in_res <- (BArray48.get64 res_0 (W64.to_uint idx));
+          leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint idx))])]);
+          v <- (BArray48.get64 nodeElem (W64.to_uint idx));
+          new_res <- in_res;
+          new_res <- (cond_b ? v : new_res);
+          zero <- (W64.of_int 0);
+          v <- (cond_b ? zero : v);
+          leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint idx))])]);
+          res_0 <- (BArray48.set64 res_0 (W64.to_uint idx) new_res);
+          leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint idx))])]);
+          nodeElem <- (BArray48.set64 nodeElem (W64.to_uint idx) v);
+          idx <- (idx + (W64.of_int 1));
+          (* Erased call to unspill *)
+          _b_1 <- (_b_1 ++ [(LeakList leak_2)]);
+          leak_cond_1 <-
+          (leak_cond_1 ++
+          [(LeakList [(Leak_bool (idx \ult (W64.of_int (2 + 4))))])]);
         }
+        leak_1 <-
+        (leak_1 ++ [(LeakList [(LeakList leak_cond_1); (LeakList _b_1)])]);
+        cond_b <- (this_i = i);
+        new_i <- this_i;
+        n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
+        new_i <- (cond_b ? n_reg : new_i);
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int 0)])]);
+        nodeElem <- (BArray48.set64 nodeElem 0 new_i);
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint pk))])]);
         node <- (SBArray1536_48.set_sub64 node (W64.to_uint pk) nodeElem);
         k <- (k + (W64.of_int 1));
+        _b_0 <- (_b_0 ++ [(LeakList leak_1)]);
+        leak_cond_0 <-
+        (leak_cond_0 ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
       }
+      leak_0 <-
+      (leak_0 ++ [(LeakList [(LeakList leak_cond_0); (LeakList _b_0)])]);
+      (* Erased call to unspill *)
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pi))])]);
       oram <- (SBArray196608_1536.set_sub64 oram (W64.to_uint pi) node);
       ix <- (ix `>>` (W8.of_int 1));
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <-
+      (leak_cond ++ [(LeakList [(Leak_bool ((W64.of_int 0) \ult ix))])]);
     }
-    return (pos, oram, res_0, ans_j, ans_k, oram_leakage, res_0_leakage);
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    return ((LeakList leak), pos, oram, res_0, ans_j, ans_k);
   }
-
-  proc pushDown (oram:BArray196608.t) : BArray196608.t * W64.t list = {
+  proc fetch_export (pos:BArray512.t, oram:BArray196608.t, res_0:BArray48.t,
+                     i:W64.t) : JLeakage.leakage * BArray512.t *
+                                BArray196608.t * BArray48.t * W64.t * W64.t = {
+    var leak:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    var ans_j:W64.t;
+    var ans_k:W64.t;
+    leak <- [];
+    pos <- pos;
+    oram <- oram;
+    res_0 <- res_0;
+    i <- i;
+    (leak_c, pos, oram, res_0, ans_j, ans_k) <@ fetch (pos, oram, res_0, i);
+    leak <- (leak ++ [leak_c]);
+    ans_j <- ans_j;
+    ans_k <- ans_k;
+    return ((LeakList leak), pos, oram, res_0, ans_j, ans_k);
+  }
+  proc pushDown (oram:BArray196608.t) : JLeakage.leakage * BArray196608.t = {
+    var _b:JLeakage.leakages;
+    var _b_0:JLeakage.leakages;
+    var leak:JLeakage.leakages;
+    var leak_0:JLeakage.leakages;
+    var leak_1:JLeakage.leakages;
+    var leak_2:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    var leak_cond:JLeakage.leakages;
+    var leak_cond_0:JLeakage.leakages;
     var n_reg:W64.t;
     var ix0:W64.t;
     var l:W64.t;
@@ -344,8 +399,9 @@ module M(SC:Syscall_t) = {
     var k_0:W64.t;
     var ik_0:W64.t;
     var i:W64.t;
+    var b_cond:bool;
+    var cond:W8.t;
     var this_nodeElem_toAdd:BArray48.t;
-    var this_nodeElem_toAdd_0:BArray48.t;
     var next_l:W64.t;
     var next_ix:W64.t;
     var ik_1:W64.t;
@@ -353,120 +409,183 @@ module M(SC:Syscall_t) = {
     var this_pos:W64.t;
     var this_nodeElem:BArray48.t;
     var this_pos_ix:W64.t;
-    var isDes_b:bool;
     var isDes:W8.t;
     var cond_b:bool;
-    var cond:W8.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
+    var cond_0:W8.t;
+    var new_i:W64.t;
+    var n_reg_0:W64.t;
     node <- witness;
     this_nodeElem <- witness;
     this_nodeElem_toAdd <- witness;
-    this_nodeElem_toAdd_0 <- witness;
     toAdd <- witness;
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <@ random (n_reg);
-    ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    l <@ bSR (ix0);
+    leak <- [];
+    n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
+    (leak_c, ix0) <@ random (n_reg);
+    leak <- (leak ++ [leak_c]);
+    ix0 <- (ix0 + (W64.of_int (((256 + 4) - 1) %/ 4)));
+    (leak_c, l) <@ bSR (ix0);
+    leak <- (leak ++ [leak_c]);
     l <- (l + (W64.of_int 1));
     k <- (W64.of_int 0);
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <-
+    (leak_cond ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
     while ((k \ult (W64.of_int 32))) {
+      leak_0 <- [];
       ik <- (k * (W64.of_int (2 + 4)));
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint ik))])]);
       toAdd <-
       (BArray1536.set64 toAdd (W64.to_uint ik)
-      (W64.of_int (((200 + 4) - 1) %/ 4)));
+      (W64.of_int (((256 + 4) - 1) %/ 4)));
       k <- (k + (W64.of_int 1));
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <-
+      (leak_cond ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
     }
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <-
+    (leak_cond ++ [(LeakList [(Leak_bool ((W64.of_int 0) \ult l))])]);
     while (((W64.of_int 0) \ult l)) {
+      leak_0 <- [];
       l <- (l - (W64.of_int 1));
       l <- l;
       (* Erased call to spill *)
       ix <- ix0;
       ix <- (ix `>>` (truncateu8 (l `&` (W64.of_int 63))));
       pi <- (ix * (W64.of_int (32 * (2 + 4))));
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pi))])]);
       node <- (SBArray196608_1536.get_sub64 oram (W64.to_uint pi));
       (* Erased call to spill *)
       k_0 <- (W64.of_int 0);
+      leak_cond_0 <- [];
+      _b_0 <- [];
+      leak_cond_0 <-
+      (leak_cond_0 ++ [(LeakList [(Leak_bool (k_0 \ult (W64.of_int 32)))])]);
       while ((k_0 \ult (W64.of_int 32))) {
+        leak_1 <- [];
         ik_0 <- (k_0 * (W64.of_int (2 + 4)));
+        (* Erased call to spill *)
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
         i <- (BArray1536.get64 toAdd (W64.to_uint ik_0));
-        if ((i <> (W64.of_int (((200 + 4) - 1) %/ 4)))) {
-          this_nodeElem_toAdd_0 <-
-          (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
-          node <- node;
-          (node, aux_leakage_1, aux_leakage_2) <@ addToNode (node, this_nodeElem_toAdd_0);
-          oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
-          node <- node;
-          toAdd <-
-          (BArray1536.set64 toAdd (W64.to_uint ik_0)
-          (W64.of_int (((200 + 4) - 1) %/ 4)));
-        } else {
-          this_nodeElem_toAdd <-
-          (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
-          node <- node;
-          (node, aux_leakage_1, aux_leakage_2) <@ false_addToNode (node, this_nodeElem_toAdd);
-          oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
-          node <- node;
-          toAdd <-
-          (BArray1536.set64 toAdd (W64.to_uint ik_0)
-          (W64.of_int (((200 + 4) - 1) %/ 4)));
-        }
+        b_cond <- (i <> (W64.of_int (((256 + 4) - 1) %/ 4)));
+        cond <- (SETcc b_cond);
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
+        this_nodeElem_toAdd <-
+        (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
+        node <- node;
+        (leak_c, node) <@ addToNode (node, this_nodeElem_toAdd, cond);
+        leak_1 <- (leak_1 ++ [leak_c]);
+        node <- node;
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
+        toAdd <-
+        (BArray1536.set64 toAdd (W64.to_uint ik_0)
+        (W64.of_int (((256 + 4) - 1) %/ 4)));
+        (* Erased call to unspill *)
         k_0 <- (k_0 + (W64.of_int 1));
+        _b_0 <- (_b_0 ++ [(LeakList leak_1)]);
+        leak_cond_0 <-
+        (leak_cond_0 ++
+        [(LeakList [(Leak_bool (k_0 \ult (W64.of_int 32)))])]);
       }
+      leak_0 <-
+      (leak_0 ++ [(LeakList [(LeakList leak_cond_0); (LeakList _b_0)])]);
       (* Erased call to unspill *)
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_bool (l <> (W64.of_int 0)))])]);
       if ((l <> (W64.of_int 0))) {
+        leak_1 <- [];
+        (* Erased call to spill *)
         next_l <- l;
         next_l <- (next_l - (W64.of_int 1));
         next_ix <- ix0;
         next_ix <- (next_ix `>>` (truncateu8 (next_l `&` (W64.of_int 63))));
+        (* Erased call to unspill *)
         (* Erased call to spill *)
         k_0 <- (W64.of_int 0);
+        leak_cond_0 <- [];
+        _b_0 <- [];
+        leak_cond_0 <-
+        (leak_cond_0 ++
+        [(LeakList [(Leak_bool (k_0 \ult (W64.of_int 32)))])]);
         while ((k_0 \ult (W64.of_int 32))) {
+          leak_2 <- [];
           ik_1 <- (k_0 * (W64.of_int (2 + 4)));
           (* Erased call to spill *)
+          leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint ik_1))])]);
           this_i <- (BArray1536.get64 node (W64.to_uint ik_1));
-          oram_leakage <- (pi + ik_1) :: oram_leakage;
+          leak_2 <-
+          (leak_2 ++
+          [(LeakList [(Leak_int (W64.to_uint (ik_1 + (W64.of_int 1))))])]);
           this_pos <-
           (BArray1536.get64 node (W64.to_uint (ik_1 + (W64.of_int 1))));
-          oram_leakage <- (pi + ik_1 + (W64.of_int 1)) :: oram_leakage;
+          leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint ik_1))])]);
           this_nodeElem <-
           (SBArray1536_48.get_sub64 node (W64.to_uint ik_1));
+          (* Erased call to spill *)
           this_pos_ix <- this_pos;
-          this_pos_ix <- (this_pos_ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
-          isDes_b <@ isDesOf (next_ix, this_pos_ix);
-          isDes <- (SETcc isDes_b);
-          cond_b <- (this_i <> (W64.of_int (((200 + 4) - 1) %/ 4)));
-          cond <- (SETcc cond_b);
-          cond <- (cond `&` isDes);
-          if ((cond = (W8.of_int 1))) {
-            (toAdd, aux_leakage_1, aux_leakage_2) <@ addToNode (toAdd, this_nodeElem);
-            oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
-            node <-
-            (BArray1536.set64 node (W64.to_uint ik_1)
-            (W64.of_int (((200 + 4) - 1) %/ 4)));
-            oram_leakage <- (pi + ik_1) :: oram_leakage;
-          } else {
-            (toAdd, aux_leakage_1, aux_leakage_2) <@ false_addToNode (toAdd, this_nodeElem);
-            oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
-            node <- (BArray1536.set64 node (W64.to_uint ik_1) this_i);
-            oram_leakage <- (pi + ik_1) :: oram_leakage;
-          }
+          this_pos_ix <- (this_pos_ix + (W64.of_int (((256 + 4) - 1) %/ 4)));
+          (leak_c, isDes) <@ isDesOf (next_ix, this_pos_ix);
+          leak_2 <- (leak_2 ++ [leak_c]);
+          cond_b <- (this_i <> (W64.of_int (((256 + 4) - 1) %/ 4)));
+          cond_0 <- (SETcc cond_b);
+          cond_0 <- (cond_0 `&` isDes);
+          (leak_c, toAdd) <@ addToNode (toAdd, this_nodeElem, cond_0);
+          leak_2 <- (leak_2 ++ [leak_c]);
+          new_i <- this_i;
+          cond_b <- (cond_0 = (W8.of_int 1));
+          n_reg_0 <- (W64.of_int (((256 + 4) - 1) %/ 4));
+          new_i <- (cond_b ? n_reg_0 : new_i);
+          (* Erased call to unspill *)
+          leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint ik_1))])]);
+          node <- (BArray1536.set64 node (W64.to_uint ik_1) new_i);
           (* Erased call to unspill *)
           k_0 <- (k_0 + (W64.of_int 1));
+          _b_0 <- (_b_0 ++ [(LeakList leak_2)]);
+          leak_cond_0 <-
+          (leak_cond_0 ++
+          [(LeakList [(Leak_bool (k_0 \ult (W64.of_int 32)))])]);
         }
+        leak_1 <-
+        (leak_1 ++ [(LeakList [(LeakList leak_cond_0); (LeakList _b_0)])]);
         (* Erased call to unspill *)
+        leak_0 <- (leak_0 ++ [(LeakList leak_1)]);
       } else {
-
+        leak_1 <- [];
+        leak_0 <- (leak_0 ++ [(LeakList leak_1)]);
       }
       (* Erased call to unspill *)
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pi))])]);
       oram <- (SBArray196608_1536.set_sub64 oram (W64.to_uint pi) node);
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <-
+      (leak_cond ++ [(LeakList [(Leak_bool ((W64.of_int 0) \ult l))])]);
     }
-    return (oram, oram_leakage);
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    return ((LeakList leak), oram);
   }
-  proc initORAM (pos:BArray512.t, oram:BArray196608.t) : BArray512.t *
-                                                         BArray196608.t * W64.t list = {
+  proc pushDown_export (oram:BArray196608.t) : JLeakage.leakage *
+                                               BArray196608.t = {
+    var leak:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    leak <- [];
+    oram <- oram;
+    (leak_c, oram) <@ pushDown (oram);
+    leak <- (leak ++ [leak_c]);
+    return ((LeakList leak), oram);
+  }
+  proc initORAM (pos:BArray512.t, oram:BArray196608.t) : JLeakage.leakage *
+                                                         BArray512.t *
+                                                         BArray196608.t = {
+    var _b:JLeakage.leakages;
+    var _b_0:JLeakage.leakages;
+    var leak:JLeakage.leakages;
+    var leak_0:JLeakage.leakages;
+    var leak_1:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    var leak_cond:JLeakage.leakages;
+    var leak_cond_0:JLeakage.leakages;
     var n2K:W64.t;
     var ix:W64.t;
     var pi:W64.t;
@@ -477,1089 +596,299 @@ module M(SC:Syscall_t) = {
     var l:W64.t;
     var nodeElem:BArray48.t;
     var root_node:BArray1536.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
+    var tr:W8.t;
     nodeElem <- witness;
     nodeElem_mem <- witness;
     root_node <- witness;
-    n2K <- (W64.of_int (((((200 + 4) - 1) %/ 4) * 2) * 32));
+    leak <- [];
+    n2K <- (W64.of_int (((((256 + 4) - 1) %/ 4) * 2) * 32));
     ix <- (W64.of_int 0);
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <- (leak_cond ++ [(LeakList [(Leak_bool (ix \ult n2K))])]);
     while ((ix \ult n2K)) {
+      leak_0 <- [];
       pi <- (ix * (W64.of_int (2 + 4)));
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pi))])]);
       oram <-
       (BArray196608.set64 oram (W64.to_uint pi)
-      (W64.of_int (((200 + 4) - 1) %/ 4)));
-      oram_leakage <- pi :: oram_leakage;
+      (W64.of_int (((256 + 4) - 1) %/ 4)));
       ix <- (ix + (W64.of_int 1));
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <- (leak_cond ++ [(LeakList [(Leak_bool (ix \ult n2K))])]);
     }
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
     i <- (W64.of_int 0);
-    while ((i \ult (W64.of_int (((200 + 4) - 1) %/ 4)))) {
-      n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-      pos_0 <@ random (n_reg);
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <-
+    (leak_cond ++
+    [(LeakList [(Leak_bool (i \ult (W64.of_int (((256 + 4) - 1) %/ 4))))])]);
+    while ((i \ult (W64.of_int (((256 + 4) - 1) %/ 4)))) {
+      leak_0 <- [];
+      n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
+      (leak_c, pos_0) <@ random (n_reg);
+      leak_0 <- (leak_0 ++ [leak_c]);
       pos_0 <- pos_0;
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint i))])]);
       pos <- (BArray512.set64 pos (W64.to_uint i) pos_0);
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int 0)])]);
       nodeElem_mem <- (BArray48.set64 nodeElem_mem 0 i);
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int 1)])]);
       nodeElem_mem <- (BArray48.set64 nodeElem_mem 1 pos_0);
       l <- (W64.of_int 2);
+      leak_cond_0 <- [];
+      _b_0 <- [];
+      leak_cond_0 <-
+      (leak_cond_0 ++
+      [(LeakList [(Leak_bool (l \ult (W64.of_int (2 + 4))))])]);
       while ((l \ult (W64.of_int (2 + 4)))) {
+        leak_1 <- [];
+        leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint l))])]);
         nodeElem_mem <-
         (BArray48.set64 nodeElem_mem (W64.to_uint l) (W64.of_int 0));
         l <- (l + (W64.of_int 1));
+        _b_0 <- (_b_0 ++ [(LeakList leak_1)]);
+        leak_cond_0 <-
+        (leak_cond_0 ++
+        [(LeakList [(Leak_bool (l \ult (W64.of_int (2 + 4))))])]);
       }
+      leak_0 <-
+      (leak_0 ++ [(LeakList [(LeakList leak_cond_0); (LeakList _b_0)])]);
       nodeElem <- nodeElem_mem;
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (32 * (2 + 4)))])]);
       root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
-      (root_node, aux_leakage_1, aux_leakage_2) <@ addToNode (root_node, nodeElem);
-      oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-      oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
       (* Erased call to spill *)
-      (oram, aux_leakage_1) <@ pushDown (oram);
-      oram_leakage <- aux_leakage_1 ++ oram_leakage;
+      (* Erased call to spill *)
+      (* Erased call to spill *)
+      tr <- (W8.of_int 1);
+      (leak_c, root_node) <@ addToNode (root_node, nodeElem, tr);
+      leak_0 <- (leak_0 ++ [leak_c]);
+      (* Erased call to unspill *)
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (32 * (2 + 4)))])]);
+      oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
+      (leak_c, oram) <@ pushDown (oram);
+      leak_0 <- (leak_0 ++ [leak_c]);
+      (* Erased call to unspill *)
       (* Erased call to unspill *)
       i <- (i + (W64.of_int 1));
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <-
+      (leak_cond ++
+      [(LeakList [(Leak_bool (i \ult (W64.of_int (((256 + 4) - 1) %/ 4))))])]);
     }
-    return (pos, oram, oram_leakage);
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    return ((LeakList leak), pos, oram);
   }
-
-  proc read (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t) : BArray512.t *
-                                                                 BArray196608.t *
-                                                                 W64.t * W64.t list = {
+  proc initORAM_export (pos:BArray512.t, oram:BArray196608.t) : JLeakage.leakage *
+                                                                BArray512.t *
+                                                                BArray196608.t = {
+    var leak:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    leak <- [];
+    pos <- pos;
+    oram <- oram;
+    (leak_c, pos, oram) <@ initORAM (pos, oram);
+    leak <- (leak ++ [leak_c]);
+    return ((LeakList leak), pos, oram);
+  }
+  proc read_write (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t, v:W64.t,
+                   wr:W8.t) : JLeakage.leakage * BArray512.t *
+                              BArray196608.t * W64.t = {
+    var _b:JLeakage.leakages;
+    var leak:JLeakage.leakages;
+    var leak_0:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    var leak_cond:JLeakage.leakages;
     var ans:W64.t;
     var i:W64.t;
-    var b_sz_reg:W64.t;
     var j:W64.t;
     var res_0:BArray48.t;
     var res_p:BArray48.t;
-    var n_reg:W64.t;
-    var new_pos:W64.t;
-    var root_node:BArray1536.t;
-    var  _0:W64.t;
-    var  _1:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    res_0 <- witness;
-    res_p <- witness;
-    root_node <- witness;
-    i <- in_0;
-    b_sz_reg <- (W64.of_int 4);
-    i <- (i \udiv b_sz_reg);
-    i <- i;
-    j <- in_0;
-    j <- (j \umod b_sz_reg);
-    res_p <- res_0;
-    (pos, oram, res_p,  _0,  _1, aux_leakage_1, aux_leakage_2) <@ fetch (pos, oram, res_p, i);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    ans <- (BArray48.get64 res_p (W64.to_uint ((W64.of_int 2) + j)));
-    (* Erased call to spill *)
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    new_pos <@ random (n_reg);
-    new_pos <- new_pos;
-    res_p <- (BArray48.set64 res_p 1 new_pos);
-    pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
-    root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
-    res_p <- res_p;
-    (root_node, aux_leakage_1, aux_leakage_2) <@ addToNode (root_node, res_p);
-    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-    oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-    (oram, aux_leakage_1) <@ pushDown (oram);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    (* Erased call to unspill *)
-    return (pos, oram, ans, oram_leakage);
-  }
-  proc write (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t, v:W64.t) :
-      BArray512.t * BArray196608.t * W64.t list = {
-    var i:W64.t;
-    var b_sz_reg:W64.t;
-    var j:W64.t;
-    var res_0:BArray48.t;
-    var res_p:BArray48.t;
-    var n_reg:W64.t;
-    var new_pos:W64.t;
-    var root_node:BArray1536.t;
-    var  _0:W64.t;
-    var  _1:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    res_0 <- witness;
-    res_p <- witness;
-    root_node <- witness;
-    i <- in_0;
-    i <- i;
-    b_sz_reg <- (W64.of_int 4);
-    b_sz_reg <- b_sz_reg;
-    i <- (i \udiv b_sz_reg);
-    i <- i;
-    j <- in_0;
-    j <- j;
-    b_sz_reg <- b_sz_reg;
-    j <- (j \umod b_sz_reg);
-    j <- j;
-    res_p <- res_0;
-    (* Erased call to spill *)
-    (* Erased call to spill *)
-    (pos, oram, res_p,  _0,  _1, aux_leakage_1, aux_leakage_2) <@ fetch(pos, oram, res_p, i);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    (* Erased call to unspill *)
-    (* Erased call to unspill *)
-    res_p <- (BArray48.set64 res_p (W64.to_uint ((W64.of_int 2) + j)) v);
-    n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
-    new_pos <@ random (n_reg);
-    new_pos <- new_pos;
-    res_p <- (BArray48.set64 res_p 1 new_pos);
-    pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
-    root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
-    res_p <- res_p;
-    (root_node, aux_leakage_1, aux_leakage_2) <@ addToNode (root_node, res_p);
-    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-    oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-    (oram, aux_leakage_1) <@ pushDown (oram);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    return (pos, oram, oram_leakage);
-  }
-}.
-
-module Jasmin = M(Syscall).
-
-(* Type of operations that can be done in an ORAM *)
-type inst_calls = [
-  | Rd of W64.t
-  | Wt of (W64.t * W64.t)
-].
-type prog_calls = inst_calls list.
-
-(* Execute a list of operations in an emty ORAM and return the result of the reads and the leackage *)
-module CompileCalls = {
-  proc compile_calls(p:prog_calls) : W64.t list * W64.t list = {
-    var pos:BArray512.t;
-    var oram:BArray196608.t;
-    var i:int;
-    var elem:inst_calls;
-    var res_0:W64.t;
-    var ans:W64.t list;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    pos <- witness;
-    oram <- witness;
-    oram_leakage <- [];
-    (pos, oram, aux_leakage_1) <@ Jasmin.initORAM (pos, oram);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-
-    i <- 0;
-    while (i < size p) {
-      elem <- nth witness p i;
-      match elem with
-      | Rd in_0 => {
-          (pos, oram, res_0, aux_leakage_1) <@ Jasmin.read (pos, oram, in_0);
-          oram_leakage <- aux_leakage_1 ++ oram_leakage;
-          ans <- res_0 :: ans;
-        }
-      | Wt t => {
-          (pos, oram, aux_leakage_1) <@ Jasmin.write (pos, oram, t.`1, t.`2);
-          oram_leakage <- aux_leakage_1 ++ oram_leakage;
-        }
-      end;
-      i <- i + 1;
-    }
-
-    return (ans, oram_leakage);
-  }
-}.
-
-(* Module for versions of the procs that only return the leackage part *)
-module OnlyLeakage = {
-  proc addToNode_leakage() : W64.t list * W64.t list = {
-    var k:W64.t;
-    var pk:W64.t;
-    var j:W64.t;
-    var node_leakage:W64.t list;
-    var nodeElem_leakage:W64.t list;
-
-    node_leakage <- [];
-    nodeElem_leakage <- [];
-
-    nodeElem_leakage <- W64.of_int 0 :: nodeElem_leakage;
-    nodeElem_leakage <- W64.of_int 1 :: nodeElem_leakage;
-    nodeElem_leakage <- W64.of_int 2 :: nodeElem_leakage;
-
-    k <- (W64.of_int 0);
-    while ((k \ult (W64.of_int 32))) {
-      pk <- (k * (W64.of_int (2 + 4)));
-      node_leakage <- (pk + W64.of_int 0) :: node_leakage;
-      node_leakage <- (pk + W64.of_int 0) :: node_leakage;
-      node_leakage <- (pk + W64.of_int 1) :: node_leakage;
-      node_leakage <- (pk + W64.of_int 1) :: node_leakage;
-      j <- (W64.of_int 0);
-      while ((j \ult (W64.of_int 4))) {
-        node_leakage <- (pk + W64.of_int 2 + j) :: node_leakage;
-        node_leakage <- (pk + W64.of_int 2 + j) :: node_leakage;
-        nodeElem_leakage <- (W64.of_int 2 + j) :: node_leakage;
-        j <- (j + (W64.of_int 1));
-      }
-      k <- (k + (W64.of_int 1));
-    }
-    return (node_leakage, nodeElem_leakage);
-  }
-
-  proc fetch_leakage(pos:BArray512.t,  i:W64.t) :
-      W64.t list * W64.t list = {
-    var ix:W64.t;
-    var pi:W64.t;
-    var k:W64.t;
-    var pk:W64.t;
-    var idx:W64.t;
-    var oram_leakage:W64.t list;
-    var res_0_leakage:W64.t list;
-    oram_leakage <- [];
-    res_0_leakage <- [];
-    ix <- (BArray512.get64 pos (W64.to_uint i));
-    ix <- (ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    while (((W64.of_int 0) \ult ix)) {
-      pi <- ix;
-      pi <- (pi * (W64.of_int (32 * (2 + 4))));
-      k <- (W64.of_int 0);
-      while ((k \ult (W64.of_int 32))) {
-        pk <- (k * (W64.of_int (2 + 4)));
-        oram_leakage <- (pi + pk + W64.of_int 0) :: oram_leakage;
-        idx <- (W64.of_int 0);
-        while ((idx \ult (W64.of_int (2 + 4)))) {
-          res_0_leakage <- idx :: res_0_leakage;
-          oram_leakage <- (pi + pk + idx) :: oram_leakage;
-          res_0_leakage <- idx :: res_0_leakage;
-          oram_leakage <- (pi + pk + idx) :: oram_leakage;
-          idx <- (idx + (W64.of_int 1));
-        }
-        k <- (k + (W64.of_int 1));
-      }
-      ix <- (ix `>>` (W8.of_int 1));
-    }
-    return (oram_leakage, res_0_leakage);
-  }
-
-  proc pushDown_leakage () : W64.t list = {
-    var n_reg:W64.t;
-    var ix0:W64.t;
-    var l:W64.t;
-    var ix:W64.t;
-    var pi:W64.t;
-    var k_0:W64.t;
-    var ik_1:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <@ Jasmin.random (n_reg);
-    ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    l <@ Jasmin.bSR (ix0);
-    l <- (l + (W64.of_int 1));
-    while (((W64.of_int 0) \ult l)) {
-      l <- (l - (W64.of_int 1));
-      l <- l;
-      ix <- ix0;
-      ix <- (ix `>>` (truncateu8 (l `&` (W64.of_int 63))));
-      pi <- (ix * (W64.of_int (32 * (2 + 4))));
-      k_0 <- (W64.of_int 0);
-      while ((k_0 \ult (W64.of_int 32))) {
-        (aux_leakage_1, aux_leakage_2) <@ addToNode_leakage();
-        oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
-        k_0 <- (k_0 + (W64.of_int 1));
-      }
-      if ((l <> (W64.of_int 0))) {
-        k_0 <- (W64.of_int 0);
-        while ((k_0 \ult (W64.of_int 32))) {
-          ik_1 <- (k_0 * (W64.of_int (2 + 4)));
-          oram_leakage <- (pi + ik_1) :: oram_leakage;
-          oram_leakage <- (pi + ik_1 + (W64.of_int 1)) :: oram_leakage;
-          (aux_leakage_1, aux_leakage_2) <@ addToNode_leakage();
-          oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
-          oram_leakage <- (pi + ik_1) :: oram_leakage;
-          k_0 <- (k_0 + (W64.of_int 1));
-        }
-      }
-    }
-    return oram_leakage;
-  }
-
-  proc initORAM_leakage(pos:BArray512.t) : BArray512.t * W64.t list = {
-    var n2K:W64.t;
-    var ix:W64.t;
-    var pi:W64.t;
-    var i:W64.t;
-    var n_reg:W64.t;
-    var pos_0:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    n2K <- (W64.of_int (((((200 + 4) - 1) %/ 4) * 2) * 32));
-    ix <- (W64.of_int 0);
-    while ((ix \ult n2K)) {
-      pi <- (ix * (W64.of_int (2 + 4)));
-      oram_leakage <- pi :: oram_leakage;
-      ix <- (ix + (W64.of_int 1));
-    }
-    i <- (W64.of_int 0);
-    while ((i \ult (W64.of_int (((200 + 4) - 1) %/ 4)))) {
-      n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-      pos_0 <@ Jasmin.random (n_reg);
-      pos_0 <- pos_0;
-      pos <- (BArray512.set64 pos (W64.to_uint i) pos_0);
-      (aux_leakage_1, aux_leakage_2) <@ addToNode_leakage();
-      oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-      aux_leakage_1 <@ pushDown_leakage();
-      oram_leakage <- aux_leakage_1 ++ oram_leakage;
-      i <- (i + (W64.of_int 1));
-    }
-    return (pos, oram_leakage);
-  }
-
-  proc read_write_leakage (pos:BArray512.t, in_0:W64.t) : BArray512.t * W64.t list = {
-    var i:W64.t;
-    var n_reg:W64.t;
-    var new_pos:W64.t;
-    var b_sz_reg:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    i <- in_0;
-    b_sz_reg <- (W64.of_int 4);
-    i <- (i \udiv b_sz_reg);
-    (aux_leakage_1, aux_leakage_2) <@ fetch_leakage (pos, i);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    new_pos <@ Jasmin.random (n_reg);
-    new_pos <- new_pos;
-    pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
-    (aux_leakage_1, aux_leakage_2) <@ addToNode_leakage();
-    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-    aux_leakage_1 <@ pushDown_leakage();
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    return (pos, oram_leakage);
-  }
-
-  proc compile_calls_leakage(p:prog_calls) : BArray512.t * W64.t list = {
-    var pos:BArray512.t;
-    var oram:BArray196608.t;
-    var i:int;
-    var elem:inst_calls;
-    var ans:W64.t list;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    (pos, aux_leakage_1) <@ initORAM_leakage(pos);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-
-    i <- 0;
-    while (i < size p) {
-      elem <- nth witness p i;
-      match elem with
-      | Rd in_0 => {
-          (pos, aux_leakage_1) <@ read_write_leakage (pos, in_0);
-        }
-      | Wt t => {
-          (pos, aux_leakage_1) <@ read_write_leakage (pos, t.`1);
-        }
-      end;
-      oram_leakage <- aux_leakage_1 ++ oram_leakage;
-      i <- i + 1;
-    }
-
-    return (pos, oram_leakage);
-  }
-}.
-
-(* Module for versions of the procs in witch the computation is separated from the generation of random numbers *)
-module RandomTape = {
-  proc pushDown_tape (oram:BArray196608.t, ix0:W64.t) : BArray196608.t * W64.t list = {
-    var l:W64.t;
-    var k:W64.t;
-    var ik:W64.t;
-    var toAdd:BArray1536.t;
-    var ix:W64.t;
-    var pi:W64.t;
-    var node:BArray1536.t;
-    var k_0:W64.t;
-    var ik_0:W64.t;
-    var i:W64.t;
-    var this_nodeElem_toAdd:BArray48.t;
-    var this_nodeElem_toAdd_0:BArray48.t;
-    var next_l:W64.t;
-    var next_ix:W64.t;
-    var ik_1:W64.t;
-    var this_i:W64.t;
-    var this_pos:W64.t;
-    var this_nodeElem:BArray48.t;
-    var this_pos_ix:W64.t;
-    var isDes_b:bool;
-    var isDes:W8.t;
+    var ji:W64.t;
+    var new_v:W64.t;
     var cond_b:bool;
     var cond:W8.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    node <- witness;
-    this_nodeElem <- witness;
-    this_nodeElem_toAdd <- witness;
-    this_nodeElem_toAdd_0 <- witness;
-    toAdd <- witness;
-    ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    l <@ Jasmin.bSR (ix0);
-    l <- (l + (W64.of_int 1));
-    k <- (W64.of_int 0);
-    while ((k \ult (W64.of_int 32))) {
-      ik <- (k * (W64.of_int (2 + 4)));
-      toAdd <-
-      (BArray1536.set64 toAdd (W64.to_uint ik)
-      (W64.of_int (((200 + 4) - 1) %/ 4)));
-      k <- (k + (W64.of_int 1));
-    }
-    while (((W64.of_int 0) \ult l)) {
-      l <- (l - (W64.of_int 1));
-      l <- l;
-      (* Erased call to spill *)
-      ix <- ix0;
-      ix <- (ix `>>` (truncateu8 (l `&` (W64.of_int 63))));
-      pi <- (ix * (W64.of_int (32 * (2 + 4))));
-      node <- (SBArray196608_1536.get_sub64 oram (W64.to_uint pi));
-      (* Erased call to spill *)
-      k_0 <- (W64.of_int 0);
-      while ((k_0 \ult (W64.of_int 32))) {
-        ik_0 <- (k_0 * (W64.of_int (2 + 4)));
-        i <- (BArray1536.get64 toAdd (W64.to_uint ik_0));
-        if ((i <> (W64.of_int (((200 + 4) - 1) %/ 4)))) {
-          this_nodeElem_toAdd_0 <-
-          (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
-          node <- node;
-          (node, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (node, this_nodeElem_toAdd_0);
-          oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
-          node <- node;
-          toAdd <-
-          (BArray1536.set64 toAdd (W64.to_uint ik_0)
-          (W64.of_int (((200 + 4) - 1) %/ 4)));
-        } else {
-          this_nodeElem_toAdd <-
-          (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
-          node <- node;
-          (node, aux_leakage_1, aux_leakage_2) <@ Jasmin.false_addToNode (node, this_nodeElem_toAdd);
-          oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
-          node <- node;
-          toAdd <-
-          (BArray1536.set64 toAdd (W64.to_uint ik_0)
-          (W64.of_int (((200 + 4) - 1) %/ 4)));
-        }
-        k_0 <- (k_0 + (W64.of_int 1));
-      }
-      (* Erased call to unspill *)
-      if ((l <> (W64.of_int 0))) {
-        next_l <- l;
-        next_l <- (next_l - (W64.of_int 1));
-        next_ix <- ix0;
-        next_ix <- (next_ix `>>` (truncateu8 (next_l `&` (W64.of_int 63))));
-        (* Erased call to spill *)
-        k_0 <- (W64.of_int 0);
-        while ((k_0 \ult (W64.of_int 32))) {
-          ik_1 <- (k_0 * (W64.of_int (2 + 4)));
-          (* Erased call to spill *)
-          this_i <- (BArray1536.get64 node (W64.to_uint ik_1));
-          oram_leakage <- (pi + ik_1) :: oram_leakage;
-          this_pos <-
-          (BArray1536.get64 node (W64.to_uint (ik_1 + (W64.of_int 1))));
-          oram_leakage <- (pi + ik_1 + (W64.of_int 1)) :: oram_leakage;
-          this_nodeElem <-
-          (SBArray1536_48.get_sub64 node (W64.to_uint ik_1));
-          this_pos_ix <- this_pos;
-          this_pos_ix <- (this_pos_ix + (W64.of_int (((200 + 4) - 1) %/ 4)));
-          isDes_b <@ Jasmin.isDesOf (next_ix, this_pos_ix);
-          isDes <- (SETcc isDes_b);
-          cond_b <- (this_i <> (W64.of_int (((200 + 4) - 1) %/ 4)));
-          cond <- (SETcc cond_b);
-          cond <- (cond `&` isDes);
-          if ((cond = (W8.of_int 1))) {
-            (toAdd, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (toAdd, this_nodeElem);
-            oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
-            node <-
-            (BArray1536.set64 node (W64.to_uint ik_1)
-            (W64.of_int (((200 + 4) - 1) %/ 4)));
-            oram_leakage <- (pi + ik_1) :: oram_leakage;
-          } else {
-            (toAdd, aux_leakage_1, aux_leakage_2) <@ Jasmin.false_addToNode (toAdd, this_nodeElem);
-            oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
-            node <- (BArray1536.set64 node (W64.to_uint ik_1) this_i);
-            oram_leakage <- (pi + ik_1) :: oram_leakage;
-          }
-          (* Erased call to unspill *)
-          k_0 <- (k_0 + (W64.of_int 1));
-        }
-        (* Erased call to unspill *)
-      } else {
-
-      }
-      (* Erased call to unspill *)
-      oram <- (SBArray196608_1536.set_sub64 oram (W64.to_uint pi) node);
-    }
-    return (oram, oram_leakage);
-  }
-
-  proc pushDown (oram:BArray196608.t) : BArray196608.t * W64.t list = {
-    var ix0:W64.t;
-    var oram_leakage:W64.t list;
-    var n_reg:W64.t;
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <@ Jasmin.random (n_reg);
-    (oram, oram_leakage) <@ pushDown_tape(oram, ix0);
-    return (oram, oram_leakage);
-  }
-
-  proc initORAM_tape (pos:BArray512.t, oram:BArray196608.t, tape:W64.t list)
-      : BArray512.t * BArray196608.t * W64.t list = {
-    var n2K:W64.t;
-    var ix:W64.t;
-    var pi:W64.t;
-    var i:W64.t;
-    var pos_0:W64.t;
-    var nodeElem_mem:BArray48.t;
-    var l:W64.t;
-    var nodeElem:BArray48.t;
-    var root_node:BArray1536.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    var aux_tape:W64.t;
-    oram_leakage <- [];
-    nodeElem <- witness;
-    nodeElem_mem <- witness;
-    root_node <- witness;
-    n2K <- (W64.of_int (((((200 + 4) - 1) %/ 4) * 2) * 32));
-    ix <- (W64.of_int 0);
-    while ((ix \ult n2K)) {
-      pi <- (ix * (W64.of_int (2 + 4)));
-      oram <-
-      (BArray196608.set64 oram (W64.to_uint pi)
-      (W64.of_int (((200 + 4) - 1) %/ 4)));
-      oram_leakage <- pi :: oram_leakage;
-      ix <- (ix + (W64.of_int 1));
-    }
-    i <- (W64.of_int 0);
-    while ((i \ult (W64.of_int (((200 + 4) - 1) %/ 4)))) {
-      pos_0 <- head witness tape;
-      tape <- behead tape;
-      pos_0 <- pos_0;
-      pos <- (BArray512.set64 pos (W64.to_uint i) pos_0);
-      nodeElem_mem <- (BArray48.set64 nodeElem_mem 0 i);
-      nodeElem_mem <- (BArray48.set64 nodeElem_mem 1 pos_0);
-      l <- (W64.of_int 2);
-      while ((l \ult (W64.of_int (2 + 4)))) {
-        nodeElem_mem <-
-        (BArray48.set64 nodeElem_mem (W64.to_uint l) (W64.of_int 0));
-        l <- (l + (W64.of_int 1));
-      }
-      nodeElem <- nodeElem_mem;
-      root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
-      (root_node, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (root_node, nodeElem);
-      oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-      oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-      (* Erased call to spill *)
-      aux_tape <- head witness tape;
-      tape <- behead tape;
-      (oram, aux_leakage_1) <@ pushDown_tape(oram, aux_tape);
-      oram_leakage <- aux_leakage_1 ++ oram_leakage;
-      (* Erased call to unspill *)
-      i <- (i + (W64.of_int 1));
-    }
-    return (pos, oram, oram_leakage);
-  }
-
-  proc read_tape (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t, tape_elem_1:W64.t, tape_elem_2:W64.t) :
-      BArray512.t * BArray196608.t * W64.t * W64.t list = {
-    var ans:W64.t;
-    var i:W64.t;
-    var b_sz_reg:W64.t;
-    var j:W64.t;
-    var res_0:BArray48.t;
-    var res_p:BArray48.t;
+    var write:W8.t;
+    var write_b:bool;
     var n_reg:W64.t;
     var new_pos:W64.t;
     var root_node:BArray1536.t;
+    var tr:W8.t;
     var  _0:W64.t;
     var  _1:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
     res_0 <- witness;
     res_p <- witness;
     root_node <- witness;
+    leak <- [];
     i <- in_0;
-    b_sz_reg <- (W64.of_int 4);
-    i <- (i \udiv b_sz_reg);
+    i <- (i `>>` (W8.of_int 2));
     i <- i;
     j <- in_0;
-    j <- (j \umod b_sz_reg);
-    res_p <- res_0;
-    (pos, oram, res_p,  _0,  _1, aux_leakage_1, aux_leakage_2) <@ Jasmin.fetch (pos, oram, res_p, i);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    ans <- (BArray48.get64 res_p (W64.to_uint ((W64.of_int 2) + j)));
-    (* Erased call to spill *)
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    new_pos <- tape_elem_1;
-    new_pos <- new_pos;
-    res_p <- (BArray48.set64 res_p 1 new_pos);
-    pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
-    root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
-    res_p <- res_p;
-    (root_node, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (root_node, res_p);
-    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-    oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-    (oram, aux_leakage_1) <@ pushDown_tape(oram, tape_elem_2);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    (* Erased call to unspill *)
-    return (pos, oram, ans, oram_leakage);
-  }
-
-  proc write_tape (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t, v:W64.t, tape_elem_1:W64.t, tape_elem_2:W64.t) :
-      BArray512.t * BArray196608.t * W64.t list = {
-    var i:W64.t;
-    var b_sz_reg:W64.t;
-    var j:W64.t;
-    var res_0:BArray48.t;
-    var res_p:BArray48.t;
-    var n_reg:W64.t;
-    var new_pos:W64.t;
-    var root_node:BArray1536.t;
-    var  _0:W64.t;
-    var  _1:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    res_0 <- witness;
-    res_p <- witness;
-    root_node <- witness;
-    i <- in_0;
-    i <- i;
-    b_sz_reg <- (W64.of_int 4);
-    b_sz_reg <- b_sz_reg;
-    i <- (i \udiv b_sz_reg);
-    i <- i;
-    j <- in_0;
-    j <- j;
-    b_sz_reg <- b_sz_reg;
-    j <- (j \umod b_sz_reg);
-    j <- j;
+    j <- (j `&` (W64.of_int (4 - 1)));
     res_p <- res_0;
     (* Erased call to spill *)
     (* Erased call to spill *)
-    (pos, oram, res_p,  _0,  _1, aux_leakage_1, aux_leakage_2) <@ Jasmin.fetch (pos, oram, res_p, i);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
+    (* Erased call to spill *)
+    (leak_c, pos, oram, res_p,  _0,  _1) <@ fetch (pos, oram, res_p, i);
+    leak <- (leak ++ [leak_c]);
     (* Erased call to unspill *)
     (* Erased call to unspill *)
-    res_p <- (BArray48.set64 res_p (W64.to_uint ((W64.of_int 2) + j)) v);
+    (* Erased call to unspill *)
+    (* Erased call to spill *)
+    (* Erased call to spill *)
+    ji <- (W64.of_int 0);
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <-
+    (leak_cond ++ [(LeakList [(Leak_bool (ji \ult (W64.of_int 4)))])]);
+    while ((ji \ult (W64.of_int 4))) {
+      leak_0 <- [];
+      leak_0 <-
+      (leak_0 ++
+      [(LeakList [(Leak_int (W64.to_uint ((W64.of_int 2) + ji)))])]);
+      new_v <- (BArray48.get64 res_p (W64.to_uint ((W64.of_int 2) + ji)));
+      cond_b <- (ji = j);
+      ans <- (cond_b ? new_v : ans);
+      cond <- (SETcc cond_b);
+      write <- (cond `&` wr);
+      write_b <- (write = (W8.of_int 1));
+      new_v <- (write_b ? v : new_v);
+      leak_0 <-
+      (leak_0 ++
+      [(LeakList [(Leak_int (W64.to_uint ((W64.of_int 2) + ji)))])]);
+      res_p <-
+      (BArray48.set64 res_p (W64.to_uint ((W64.of_int 2) + ji)) new_v);
+      ji <- (ji + (W64.of_int 1));
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <-
+      (leak_cond ++ [(LeakList [(Leak_bool (ji \ult (W64.of_int 4)))])]);
+    }
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    (* Erased call to spill *)
+    (* Erased call to spill *)
+    (* Erased call to spill *)
     n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
-    new_pos <- tape_elem_1;
+    (leak_c, new_pos) <@ random (n_reg);
+    leak <- (leak ++ [leak_c]);
     new_pos <- new_pos;
+    (* Erased call to unspill *)
+    (* Erased call to unspill *)
+    leak <- (leak ++ [(LeakList [(Leak_int 1)])]);
     res_p <- (BArray48.set64 res_p 1 new_pos);
-    pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
-    root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
-    res_p <- res_p;
-    (root_node, aux_leakage_1, aux_leakage_2) <@ Jasmin.addToNode (root_node, res_p);
-    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-    oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-    (oram, aux_leakage_1) <@ pushDown_tape(oram, tape_elem_2);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    return (pos, oram, oram_leakage);
-  }
-
-  proc compile_calls_tape(x:prog_calls, tape:W64.t list) : W64.t list * W64.t list = {
-    var oram_leakage: W64.t list;
-    return ([], oram_leakage); (* TO DO *)
-  }
-}.
-
-(* Module for versions of the procs in witch the computation is separated from the generation of random numbers, and the procs only return the leakage *)
-module RandomTapeOnlyLeakage = {
-  proc pushDown_tape_leakage (ix0:W64.t) : W64.t list = {
-    var n_reg:W64.t;
-    var l:W64.t;
-    var ix:W64.t;
-    var pi:W64.t;
-    var k_0:W64.t;
-    var ik_1:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <- (ix0 + (W64.of_int (((200 + 4) - 1) %/ 4)));
-    l <@ Jasmin.bSR (ix0);
-    l <- (l + (W64.of_int 1));
-    while (((W64.of_int 0) \ult l)) {
-      l <- (l - (W64.of_int 1));
-      l <- l;
-      ix <- ix0;
-      ix <- (ix `>>` (truncateu8 (l `&` (W64.of_int 63))));
-      pi <- (ix * (W64.of_int (32 * (2 + 4))));
-      k_0 <- (W64.of_int 0);
-      while ((k_0 \ult (W64.of_int 32))) {
-        (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.addToNode_leakage();
-        oram_leakage <- map (fun x => x + pi) aux_leakage_1 ++ oram_leakage;
-        k_0 <- (k_0 + (W64.of_int 1));
-      }
-      if ((l <> (W64.of_int 0))) {
-        k_0 <- (W64.of_int 0);
-        while ((k_0 \ult (W64.of_int 32))) {
-          ik_1 <- (k_0 * (W64.of_int (2 + 4)));
-          oram_leakage <- (pi + ik_1) :: oram_leakage;
-          oram_leakage <- (pi + ik_1 + (W64.of_int 1)) :: oram_leakage;
-          (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.addToNode_leakage();
-          oram_leakage <- map (fun x => x + pi + ik_1) aux_leakage_2 ++ oram_leakage;
-          oram_leakage <- (pi + ik_1) :: oram_leakage;
-          k_0 <- (k_0 + (W64.of_int 1));
-        }
-      }
-    }
-    return oram_leakage;
-  }
-
-  proc pushDown_leakage() : W64.t list = {
-    var ix0:W64.t;
-    var oram_leakage:W64.t list;
-    var n_reg:W64.t;
-    n_reg <- (W64.of_int (((200 + 4) - 1) %/ 4));
-    ix0 <@ Jasmin.random (n_reg);
-    oram_leakage <@ pushDown_tape_leakage(ix0);
-    return oram_leakage;
-  }
-
-  proc initORAM_tape_leakage (pos:BArray512.t, tape:W64.t list) : BArray512.t * W64.t list = {
-    var n2K:W64.t;
-    var ix:W64.t;
-    var pi:W64.t;
-    var i:W64.t;
-    var n_reg:W64.t;
-    var pos_0:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    var aux_tape:W64.t;
-    oram_leakage <- [];
-    n2K <- (W64.of_int (((((200 + 4) - 1) %/ 4) * 2) * 32));
-    ix <- (W64.of_int 0);
-    while ((ix \ult n2K)) {
-      pi <- (ix * (W64.of_int (2 + 4)));
-      oram_leakage <- pi :: oram_leakage;
-      ix <- (ix + (W64.of_int 1));
-    }
-    i <- (W64.of_int 0);
-    while ((i \ult (W64.of_int (((200 + 4) - 1) %/ 4)))) {
-      pos_0 <- head witness tape;
-      tape <- behead tape;
-      pos_0 <- pos_0;
-      pos <- (BArray512.set64 pos (W64.to_uint i) pos_0);
-      (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.addToNode_leakage();
-      oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-      aux_tape <- head witness tape;
-      tape <- behead tape;
-      aux_leakage_1 <@ pushDown_tape_leakage(aux_tape);
-      oram_leakage <- aux_leakage_1 ++ oram_leakage;
-      i <- (i + (W64.of_int 1));
-    }
-    return (pos, oram_leakage);
-  }
-
-  proc read_write_tape_leakage (pos:BArray512.t, in_0:W64.t, tape_elem_1:W64.t, tape_elem_2:W64.t) :
-      BArray512.t * W64.t list = {
-    var i:W64.t;
-    var b_sz_reg:W64.t;
-    var new_pos:W64.t;
-    var oram_leakage:W64.t list;
-    var aux_leakage_1:W64.t list;
-    var aux_leakage_2:W64.t list;
-    oram_leakage <- [];
-    i <- in_0;
-    b_sz_reg <- (W64.of_int 4);
-    i <- (i \udiv b_sz_reg);
     i <- i;
-    (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.fetch_leakage(pos, i);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    new_pos <- tape_elem_1;
+    (* Erased call to unspill *)
+    leak <- (leak ++ [(LeakList [(Leak_int (W64.to_uint i))])]);
     pos <- (BArray512.set64 pos (W64.to_uint i) new_pos);
-    (aux_leakage_1, aux_leakage_2) <@ OnlyLeakage.addToNode_leakage();
-    oram_leakage <- map (fun x => x + W64.of_int (32 * (2 + 4))) aux_leakage_1 ++ oram_leakage;
-    aux_leakage_1 <@ pushDown_tape_leakage(tape_elem_2);
-    oram_leakage <- aux_leakage_1 ++ oram_leakage;
-    return (pos, oram_leakage);
+    (* Erased call to unspill *)
+    leak <- (leak ++ [(LeakList [(Leak_int (32 * (2 + 4)))])]);
+    root_node <- (SBArray196608_1536.get_sub64 oram (32 * (2 + 4)));
+    (* Erased call to spill *)
+    (* Erased call to spill *)
+    res_p <- res_p;
+    tr <- (W8.of_int 1);
+    (leak_c, root_node) <@ addToNode (root_node, res_p, tr);
+    leak <- (leak ++ [leak_c]);
+    (* Erased call to unspill *)
+    leak <- (leak ++ [(LeakList [(Leak_int (32 * (2 + 4)))])]);
+    oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
+    (leak_c, oram) <@ pushDown (oram);
+    leak <- (leak ++ [leak_c]);
+    (* Erased call to unspill *)
+    (* Erased call to unspill *)
+    return ((LeakList leak), pos, oram, ans);
+  }
+  proc read_write_export (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t,
+                          v:W64.t, wr:W8.t) : JLeakage.leakage *
+                                              BArray512.t * BArray196608.t *
+                                              W64.t = {
+    var leak:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    var ans:W64.t;
+    leak <- [];
+    pos <- pos;
+    oram <- oram;
+    in_0 <- in_0;
+    v <- v;
+    wr <- wr;
+    (leak_c, pos, oram, ans) <@ read_write (pos, oram, in_0, v, wr);
+    leak <- (leak ++ [leak_c]);
+    pos <- pos;
+    oram <- oram;
+    ans <- ans;
+    return ((LeakList leak), pos, oram, ans);
+  }
+  proc multiQuery (pos:BArray512.t, oram:BArray196608.t,
+                   queries:BArray2400.t, ans:BArray800.t) : JLeakage.leakage *
+                                                            BArray512.t *
+                                                            BArray196608.t *
+                                                            BArray800.t = {
+    var _b:JLeakage.leakages;
+    var leak:JLeakage.leakages;
+    var leak_0:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    var leak_cond:JLeakage.leakages;
+    var q:W64.t;
+    var q3:W64.t;
+    var t:W64.t;
+    var i:W64.t;
+    var v:W64.t;
+    var a:W64.t;
+    leak <- [];
+    q <- (W64.of_int 0);
+    leak_cond <- [];
+    _b <- [];
+    leak_cond <-
+    (leak_cond ++ [(LeakList [(Leak_bool (q \ult (W64.of_int 100)))])]);
+    while ((q \ult (W64.of_int 100))) {
+      leak_0 <- [];
+      q3 <- q;
+      (* Erased call to spill *)
+      (* Erased call to spill *)
+      q3 <- (q3 * (W64.of_int 3));
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint q3))])]);
+      t <- (BArray2400.get64 queries (W64.to_uint q3));
+      leak_0 <-
+      (leak_0 ++
+      [(LeakList [(Leak_int (W64.to_uint (q3 + (W64.of_int 1))))])]);
+      i <- (BArray2400.get64 queries (W64.to_uint (q3 + (W64.of_int 1))));
+      leak_0 <-
+      (leak_0 ++
+      [(LeakList [(Leak_int (W64.to_uint (q3 + (W64.of_int 2))))])]);
+      v <- (BArray2400.get64 queries (W64.to_uint (q3 + (W64.of_int 2))));
+      (* Erased call to spill *)
+      (leak_c, pos, oram, a) <@ read_write (pos, oram, i, v, (truncateu8 t));
+      leak_0 <- (leak_0 ++ [leak_c]);
+      (* Erased call to unspill *)
+      (* Erased call to unspill *)
+      (* Erased call to unspill *)
+      leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint q))])]);
+      ans <- (BArray800.set64 ans (W64.to_uint q) a);
+      q <- (q + (W64.of_int 1));
+      _b <- (_b ++ [(LeakList leak_0)]);
+      leak_cond <-
+      (leak_cond ++ [(LeakList [(Leak_bool (q \ult (W64.of_int 100)))])]);
+    }
+    leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    return ((LeakList leak), pos, oram, ans);
+  }
+  proc multiQuery_export (pos:BArray512.t, oram:BArray196608.t,
+                          ans:BArray800.t, queries:BArray2400.t) : JLeakage.leakage *
+                                                                   BArray512.t *
+                                                                   BArray196608.t *
+                                                                   BArray800.t = {
+    var leak:JLeakage.leakages;
+    var leak_c:JLeakage.leakage;
+    leak <- [];
+    pos <- pos;
+    oram <- oram;
+    ans <- ans;
+    queries <- queries;
+    (leak_c, pos, oram, ans) <@ multiQuery (pos, oram, queries, ans);
+    leak <- (leak ++ [leak_c]);
+    pos <- pos;
+    oram <- oram;
+    ans <- ans;
+    return ((LeakList leak), pos, oram, ans);
   }
 }.
-
-lemma leakage_addToNode :
-  equiv[ Jasmin.addToNode ~ OnlyLeakage.addToNode_leakage :
-      true ==> res{1}.`2 = res{2}.`1
-  ].
-proof.
-  proc.
-  simplify.
-  seq 12 6 : (={node_leakage, k}).
-  - auto.
-  while (={node_leakage, k}).
-  - seq 7 2 : (={node_leakage, k, pk}).
-    + auto.
-    auto.
-    if{1}.
-    - seq 7 4 : (={node_leakage, k, pk} /\ j_0{1} = j{2}).
-      auto.
-      seq 1 1 : (={node_leakage, k, pk} /\ j_0{1} = j{2}).
-      + while (={node_leakage, k, pk} /\ j_0{1} = j{2}).
-        * auto.
-        * skip.
-          move => &m1 &m2 H.
-          smt().
-        * wp.
-          skip.
-          move => &m1 &m2 H.
-          smt().
-    - seq 7 4 : (={node_leakage, k, pk, j}).
-      + auto.
-      while (={node_leakage, k, pk, j}).
-      * auto.
-      * skip.
-        move => &m1 &m2 H.
-        smt().
-      * skip.
-        move => &m1 &m2 H.
-        smt().
-qed.
-
-lemma leakage2_addToNode :
-  equiv[ Jasmin.addToNode ~ OnlyLeakage.addToNode_leakage :
-      true ==> res{1}.`3 = res{2}.`2
-  ].
-proof.
-  admit.
-qed.
-
-lemma leakage_false_addToNode :
-  equiv[ Jasmin.false_addToNode ~ OnlyLeakage.addToNode_leakage :
-      true ==> res{1}.`2 = res{2}.`1
-  ].
-proof.
-  proc.
-  seq 11 6 : (={node_leakage, k}).
-  - auto.
-  while (={node_leakage, k}).
-  - seq 11 6 : (={node_leakage, k, pk, j}).
-    + auto.
-    + seq 1 1 : (={node_leakage, k, pk, j}).
-      * while (={node_leakage, k, pk, j}).
-        auto.
-      * auto.
-    + auto.
-  - auto.
-qed.
-
-lemma leakage2_false_addToNode :
-  equiv[ Jasmin.false_addToNode ~ OnlyLeakage.addToNode_leakage :
-      true ==> res{1}.`3 = res{2}.`2
-  ].
-proof.
-  admit.
-qed.
-
-lemma leakage_fetch :
-  equiv[Jasmin.fetch ~ OnlyLeakage.fetch_leakage :
-    ={pos, i} ==> res{1}.`6 = res{2}.`1
-  ].
-proof.
-  proc.
-  seq 8 4 : (={pos, i, oram_leakage, ix}); auto.
-  while (={pos, i, oram_leakage, ix}).
-  - seq 4 3 : (={pos, i, oram_leakage, ix, pi, k}); auto.
-    seq 1 1 : (={pos, i, oram_leakage, ix, pi, k}).
-    + while (={pos, i, oram_leakage, ix, pi, k}).
-      * seq 4 2 : (={pos, i, oram_leakage, ix, pi, k, pk}); auto.
-        if{1}.
-        - seq 3 1 : (={pos, i, oram_leakage, ix, pi, k, pk} /\ idx_0{1} = idx{2}); auto.
-          seq 1 1 : (={pos, i, oram_leakage, ix, pi, k, pk} /\ idx_0{1} = idx{2}).
-          + while (={pos, i, oram_leakage, ix, pi, k, pk} /\ idx_0{1} = idx{2}); auto.
-            auto.
-          auto.
-        - seq 1 1 : (={pos, i, oram_leakage, ix, pi, k, pk, idx}); auto.
-          seq 1 1 : (={pos, i, oram_leakage, ix, pi, k, pk, idx}).
-          + while (={pos, i, oram_leakage, ix, pi, k, pk, idx}); auto.
-          + auto.
-      * auto.
-    + auto.
-  - auto.
-qed.
-
-lemma leakage_pushDown :
-  equiv[Jasmin.pushDown ~ OnlyLeakage.pushDown_leakage :
-    true ==> res{1}.`2 = res{2}
-  ].
-proof.
-  proc.
-  seq 13 6 : (={ix0, l, oram_leakage}).
-  - seq 12 6 : (={ix0, l, oram_leakage}).
-    + seq 7 2 : (={n_reg, oram_leakage}); auto.
-      seq 1 1 : (={ix0, n_reg, oram_leakage}).
-      * inline.
-        auto.
-      * inline.
-        auto.
-    + while{1} (={ix0, l, oram_leakage}) (32 - to_uint(k{1})).
-      * move => &m1 z.
-        auto.
-        smt. (* This is not good. But there seems to be no smt? tactic *)
-      * auto.
-        smt.
-  - while (={ix0, l, oram_leakage}); auto.
-    seq 7 6 : (={ix0, l, oram_leakage, pi, k_0}); auto.
-    seq 1 1 : (={ix0, l, oram_leakage, pi, k_0}).
-    + while (={ix0, l, oram_leakage, pi, k_0}).
-      * seq 2 0 : (={ix0, l, oram_leakage, pi, k_0}); auto.
-        if{1}.
-        - seq 2 0 : (={ix0, l, oram_leakage, pi, k_0}); auto.
-          ecall (leakage_addToNode).
-          auto.
-          move => &m1 &m2 H result_L result_R H_result.
-          move : H => [#] *.
-          subst.
-          rewrite H_result.
-          done.
-        - seq 2 0 : (={ix0, l, oram_leakage, pi, k_0}); auto.
-          ecall (leakage_false_addToNode).
-          auto.
-          move => &m1 &m2 H result_L result_R H_result.
-          move : H => [#] *.
-          subst.
-          rewrite H_result.
-          done.
-      * auto.
-    + if; auto.
-      seq 5 1 : (={ix0, l, oram_leakage, pi, k_0}); auto.
-      while (={ix0, l, oram_leakage, pi, k_0}).
-      * seq 13 3 : (={ix0, l, oram_leakage, pi, k_0, ik_1}).
-        - auto.
-          seq 8 0 : #post.
-          + auto.
-          + inline.
-            auto.
-        - if{1}.
-          + auto.
-            ecall (leakage2_addToNode).
-            auto.
-            move => &m1 &m2 H result_L result_R H_result.
-            move : H => [#] *.
-            subst.
-            rewrite H_result.
-            done.
-          + auto.
-            ecall (leakage2_false_addToNode).
-            auto.
-            move => &m1 &m2 H result_L result_R H_result.
-            move : H => [#] *.
-            subst.
-            rewrite H_result.
-            done.
-      * auto.
-qed.
-
-lemma pushDown_tape_equiv :
-  equiv[Jasmin.pushDown ~ RandomTape.pushDown :
-    ={oram} ==> ={res}
-  ].
-proof.
-  proc.
-  inline{2} 3.
-  admit. (* This should be easy, because the two programs are very similar, but I don'r know if we have the necessary tactics to transform one in to the other *)
-qed.
-
-lemma leakage_pushDown_tape :
-  equiv[RandomTape.pushDown_tape ~ RandomTapeOnlyLeakage.pushDown_tape_leakage :
-    ={ix0} ==> res{1}.`2 = res{2}
-  ].
-proof.
-  admit.
-qed.
-
-lemma leackage_initORAM :
-  equiv[Jasmin.initORAM ~ OnlyLeakage.initORAM_leakage :
-    true ==> (res{1}.`1, res{1}.`3) = res{2}
-  ].
-proof.
-  admit.
-qed.
-
-lemma leackage_initORAM_tape :
-  equiv[RandomTape.initORAM_tape ~ RandomTapeOnlyLeakage.initORAM_tape_leakage :
-    ={tape} ==> (res{1}.`1, res{1}.`3) = res{2}
-  ].
-proof.
-  admit.
-qed.
-
-lemma leakage_read :
-  equiv[Jasmin.read ~ OnlyLeakage.read_write_leakage :
-    ={pos} ==> (res{1}.`1, res{1}.`4) = res{2}
-  ].
-proof.
-  admit.
-qed.
-
-lemma leakage_read_tape :
-  equiv[RandomTape.read_tape ~ RandomTapeOnlyLeakage.read_write_tape_leakage :
-    ={pos, tape_elem_1, tape_elem_2} ==> (res{1}.`1, res{1}.`4) = res{2}
-  ].
-proof.
-  admit.
-qed.
-
-lemma leakage_write :
-  equiv[Jasmin.write ~ OnlyLeakage.read_write_leakage :
-    ={pos} ==> (res{1}.`1, res{1}.`3) = res{2}
-  ].
-proof.
-  admit.
-qed.
-
-lemma leakage_write_tape :
-  equiv[RandomTape.write_tape ~ RandomTapeOnlyLeakage.read_write_tape_leakage :
-    ={pos, tape_elem_1, tape_elem_2} ==> (res{1}.`1, res{1}.`3) = res{2}
-  ].
-proof.
-  admit.
-qed.
-
-require import SimpleORAM. (* From here we state theorems in relation with the EC model *)
-(*---*) import SimpleORAM.
-
-op to_EC_prog: prog_calls -> prog. (* Convert the program of reads and writes in to the EC model type *)
-op to_EC_tape: W64.t list -> bool list. (* Convert the tape in to the EC model tape *)
-
-op EC_leakage_to_tape: leakage list -> bool list. (* Recovers the EC model tape from the EC model leakage *)
-
-op from_EC_leakage: leakage list -> W64.t list. (* Convert the EC model tape into a tape *)
-
-op f_cells: cell list.
-
-lemma leakage_correctness:
-    forall o, is_oram pred0 o
-  =>
-  equiv [RandomTape.compile_calls_tape ~ ORAM_Tape.compile:
-    ORAM_Tape.leakage{2} = [] /\ ORAM_Tape.random_tape{2} = to_EC_tape tape{1} /\
-      arg{2} = (o, to_EC_prog x{1}, f_cells)
-    ==>  res{1}.`2 = from_EC_leakage ORAM_Tape.leakage{2}
-  ].
-proof.
-  admit.
-qed.
-
-
