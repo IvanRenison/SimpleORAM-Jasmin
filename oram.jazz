@@ -519,30 +519,30 @@ fn read_write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K *
 }
 
 // Read and optionally write a complete block (write only if wr)
-fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vs, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
+fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vals, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
   stack u64[2 + b_sz] res;
   reg ptr u64[2 + b_sz] res_p = res;
 
-  () = #spill(vs);
+  () = #spill(vals);
   () = #spill(wr);
 
   Pos, oram, res_p, _, _ = fetch(Pos, oram, res_p, i);
 
   () = #unspill(wr);
-  () = #unspill(vs);
+  () = #unspill(vals);
   () = #spill(oram);
   () = #spill(Pos);
 
-  reg u64 ji = 0;
-  while (ji < b_sz) {
-    reg u64 new_v = res_p[2 + ji];
-    ans[ji] = new_v;
-    reg u64 v = vs[ji];
+  reg u64 j = 0;
+  while (j < b_sz) {
+    reg u64 new_v = res_p[2 + j];
+    ans[j] = new_v;
+    reg u64 v = vals[j];
     reg bool wr_b = wr == 1;
     new_v = v if wr_b;
-    res_p[2 + ji] = new_v;
+    res_p[2 + j] = new_v;
 
-    ji += 1;
+    j += 1;
   }
 
   () = #spill(ans);
@@ -585,9 +585,9 @@ fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
 }
 
 export
-fn read_write_block_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vs, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
-  Pos = Pos; oram = oram; ans = ans; i = i; vs = vs; wr = wr;
-  Pos, oram, ans = read_write_block(Pos, oram, ans, i, vs, wr);
+fn read_write_block_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vals, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
+  Pos = Pos; oram = oram; ans = ans; i = i; vals = vals; wr = wr;
+  Pos, oram, ans = read_write_block(Pos, oram, ans, i, vals, wr);
   Pos = Pos; oram = oram; ans = ans;
   return Pos, oram, ans;
 }
@@ -645,7 +645,7 @@ fn multiQuery_blocks(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] ora
     q2b_sz *= (1 + 1 + b_sz);
     reg u64 t = queries[q2b_sz];
     reg u64 i = queries[q2b_sz + 1];
-    reg ptr u64[b_sz] vs = queries[q2b_sz + 2: b_sz];
+    reg ptr u64[b_sz] vals = queries[q2b_sz + 2: b_sz];
     reg u64 qb_sz = q;
     qb_sz *= b_sz;
     reg ptr u64[b_sz] this_ans = ans[qb_sz: b_sz];
@@ -656,7 +656,7 @@ fn multiQuery_blocks(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] ora
 
     reg u64 a;
 
-    Pos, oram, this_ans = read_write_block(Pos, oram, this_ans, i, vs, t);
+    Pos, oram, this_ans = read_write_block(Pos, oram, this_ans, i, vals, t);
 
     () = #unspill(qb_sz);
     () = #unspill(queries);
