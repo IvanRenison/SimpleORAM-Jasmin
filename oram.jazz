@@ -518,6 +518,80 @@ fn read_write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K *
   return Pos, oram, ans;
 }
 
+// Read and optionally write a complete block (write only if wr)
+fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vs, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
+  stack u64[2 + b_sz] res;
+  reg ptr u64[2 + b_sz] res_p = res;
+
+  () = #spill(vs);
+  () = #spill(wr);
+
+  Pos, oram, res_p, _, _ = fetch(Pos, oram, res_p, i);
+
+  () = #unspill(wr);
+  () = #unspill(vs);
+  () = #spill(oram);
+  () = #spill(Pos);
+
+  reg u64 ji = 0;
+  while (ji < b_sz) {
+    reg u64 new_v = res_p[2 + ji];
+    ans[ji] = new_v;
+    reg u64 v = vs[ji];
+    reg bool wr_b = wr == 1;
+    new_v = v if wr_b;
+    res_p[2 + ji] = new_v;
+
+    ji += 1;
+  }
+
+  () = #spill(ans);
+  () = #spill(res_p);
+  () = #spill(i);
+
+  reg u64 N_reg = N;
+  reg u64 new_pos = random(N_reg);
+  new_pos = new_pos;
+
+  () = #unspill(i);
+  () = #unspill(res_p);
+
+  res_p[1] = new_pos;
+  #declassify i = i;
+  () = #unspill(Pos);
+  Pos[i] = new_pos;
+
+  () = #unspill(oram);
+
+  reg ptr u64[K * (2 + b_sz)] root_node = oram[K * (2 + b_sz): K * (2 + b_sz)];
+
+  () = #spill(Pos);
+  () = #spill(oram);
+
+  res_p = res_p;
+  reg u8 tr = 1;
+  root_node = addToNode(root_node, res_p, tr);
+
+  () = #unspill(oram);
+
+  oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
+
+  oram = pushDown(oram);
+
+  () = #unspill(Pos);
+  () = #unspill(ans);
+
+  return Pos, oram, ans;
+}
+
+export
+fn read_write_block_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vs, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
+  Pos = Pos; oram = oram; ans = ans; i = i; vs = vs; wr = wr;
+  Pos, oram, ans = read_write_block(Pos, oram, ans, i, vs, wr);
+  Pos = Pos; oram = oram; ans = ans;
+  return Pos, oram, ans;
+}
+
 fn multiQuery(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * (1 + 1 + 1)] queries, reg ptr u64 [N_queries] ans) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries] {
 
   reg u64 q = 0;
@@ -555,6 +629,52 @@ export
 fn multiQuery_export(#public reg ptr u64[N] Pos, #private reg ptr u64[2 * N * K * (2 + b_sz)] oram, #private reg ptr u64 [N_queries] ans, #private reg ptr u64 [N_queries * (1 + 1 + 1)] queries) -> #public reg ptr u64[N], #private reg ptr u64[2 * N * K * (2 + b_sz)], #private reg ptr u64 [N_queries] {
   Pos = Pos; oram = oram; ans = ans; queries = queries;
   Pos, oram, ans = multiQuery(Pos, oram, queries, ans);
+  Pos = Pos; oram = oram; ans = ans;
+  return Pos, oram, ans;
+}
+
+fn multiQuery_blocks(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * (1 + 1 + b_sz)] queries, reg ptr u64 [N_queries * b_sz] ans) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries * b_sz] {
+
+  reg u64 q = 0;
+  while (q < N_queries) {
+    reg u64 q2b_sz = q;
+
+    () = #spill(q);
+    () = #spill(ans);
+
+    q2b_sz *= (1 + 1 + b_sz);
+    reg u64 t = queries[q2b_sz];
+    reg u64 i = queries[q2b_sz + 1];
+    reg ptr u64[b_sz] vs = queries[q2b_sz + 2: b_sz];
+    reg u64 qb_sz = q;
+    qb_sz *= b_sz;
+    reg ptr u64[b_sz] this_ans = ans[qb_sz: b_sz];
+
+    () = #spill(queries);
+    () = #spill(qb_sz);
+
+
+    reg u64 a;
+
+    Pos, oram, this_ans = read_write_block(Pos, oram, this_ans, i, vs, t);
+
+    () = #unspill(qb_sz);
+    () = #unspill(queries);
+    () = #unspill(ans);
+    () = #unspill(q);
+
+    ans[qb_sz: b_sz] = this_ans;
+
+    q += 1;
+  }
+
+  return Pos, oram, ans;
+}
+
+export
+fn multiQuery_blocks_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * b_sz] ans, reg ptr u64 [N_queries * (1 + 1 + b_sz)] queries) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries * b_sz] {
+  Pos = Pos; oram = oram; queries = queries; ans = ans;
+  Pos, oram, ans = multiQuery_blocks(Pos, oram, queries, ans);
   Pos = Pos; oram = oram; ans = ans;
   return Pos, oram, ans;
 }

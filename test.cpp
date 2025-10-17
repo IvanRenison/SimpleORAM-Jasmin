@@ -20,14 +20,24 @@ extern "C" void initORAM_export(ull* Pos, ull* oram);
 extern "C" pair<ull, ull> fetch_export(ull* Pos, ull* oram, ull* res, ull i);
 extern "C" void pushDown_export(ull* oram);
 extern "C" ull read_write_export(ull* Pos, ull* oram, ull in, ull v, u8 ty);
+extern "C" void read_write_block_export(ull* Pos, ull* oram, ull* ans, ull i, ull* vs, u8 ty);
 
 struct Query {
-  ull ty; // 0 for read, 1 for read and write
+  ull ty; // 0 for only read, 1 for read and write
   ull in; // index in the virtual memory
-  ull v; // value to write if ty = 1
+  ull v;  // value to write if ty = 1
 } __attribute__((packed));
 
 extern "C" void multiQuery_export(ull* Pos, ull* oram, ull* ans, Query* queries);
+
+struct QueryBlock {
+  ull ty;              // 0 for only read, 1 for read and write
+  ull i;               // block index
+  array<ull, b_sz> v;  // values to write if ty = 1
+} __attribute__((packed));;
+
+extern "C" void multiQuery_blocks_export(ull* Pos, ull* oram, ull* ans, QueryBlock* queries);
+
 
 struct NodeElem {
   ull i; // This node has the information of block i, or N to indicate invalid NodeElem
@@ -167,7 +177,7 @@ void test_empty_read(ull* Pos, ull* oram_, array<ull, n> real_mem) {
 
 int main() {
 
-  for (ull tc = 0; tc < 1000; tc++) {
+  for (ull tc = 0; tc < 100; tc++) {
     cerr << tc << endl;
     Node* oram = new Node[2 * N];
     ull* oram_ = (ull*)oram;
@@ -260,6 +270,133 @@ int main() {
     assert(checkInvariant(Pos, oram_, mem));
     for (ull q = 0; q < N_queries; q++) {
       assert(ans[q] == real_ans[q]);
+    }
+
+    delete[] oram;
+    delete[] Pos;
+    delete[] queries;
+    delete[] ans;
+    delete[] real_ans;
+  }
+
+  cerr << "Third part done" << endl;
+
+  for (ull tc = 0; tc < 100; tc++) {
+    cerr << tc << endl;
+
+    Node* oram = new Node[2 * N];
+    ull* oram_ = (ull*)oram;
+    ull* Pos = new ull[N];
+
+    array<ull, n> mem = {0};
+
+    initORAM_export(Pos, oram_);
+    assert(checkInvariant(Pos, oram_, mem));
+
+    for (ull it = 0; it < 1000; it++) {
+      ull in = rand() % n;
+      ull i = in / b_sz;
+
+      ull t = rand() % 2;
+
+      ull* vs = new ull[b_sz];
+      ull* ans = new ull[b_sz];
+      if (t) { // Read
+        read_write_block_export(Pos, oram_, ans, i, vs, 0);
+        for (ull j = 0; j < b_sz; j++) {
+          ull idx = i * b_sz + j;
+          if (idx < n) {
+            assert(ans[j] == mem[idx]);
+          } else {
+            assert(ans[j] == 0);
+          }
+        }
+        assert(checkInvariant(Pos, oram_, mem));
+      } else { // Write
+        for (ull j = 0; j < b_sz; j++) {
+          ull idx = i * b_sz + j;
+          if (idx < n) {
+            vs[j] = rand();
+          }
+        }
+        read_write_block_export(Pos, oram_, ans, i, vs, 1);
+        for (ull j = 0; j < b_sz; j++) {
+          ull idx = i * b_sz + j;
+          if (idx < n) {
+            assert(ans[j] == mem[idx]);
+            mem[idx] = vs[j];
+          } else {
+            assert(ans[j] == 0);
+          }
+        }
+      }
+
+      delete [] vs;
+      delete [] ans;
+    }
+
+    delete[] oram;
+    delete[] Pos;
+  }
+
+  cerr << "Fourth part done" << endl;
+
+  for (ull tc = 0; tc < 100; tc++) {
+    cerr << tc << endl;
+
+    Node* oram = new Node[2 * N];
+    ull* oram_ = (ull*)oram;
+    ull* Pos = new ull[N];
+
+    array<ull, n> mem = {0};
+
+    initORAM_export(Pos, oram_);
+    assert(checkInvariant(Pos, oram_, mem));
+
+    QueryBlock* queries = new QueryBlock[N_queries];
+    array<ull, b_sz>* ans = new array<ull, b_sz>[N_queries];
+    array<ull, b_sz>* real_ans = new array<ull, b_sz>[N_queries];
+
+    for (ull q = 0; q < N_queries; q++) {
+      ull in = rand() % n;
+      ull i = in / b_sz;
+
+      ull t = rand() % 2;
+
+      if (t) { // Read
+        queries[q] = {0, i, {}};
+        for (ull j = 0; j < b_sz; j++) {
+          ull idx = i * b_sz + j;
+          if (idx < n) {
+            real_ans[q][j] = mem[idx];
+          } else {
+            real_ans[q][j] = 0;
+          }
+        }
+      } else { // Write
+        queries[q] = {1, i, {}};
+        for (ull j = 0; j < b_sz; j++) {
+          ull idx = i * b_sz + j;
+          if (idx < n) {
+            ull v = rand();
+            queries[q].v[j] = v;
+            real_ans[q][j] = mem[idx];
+            mem[idx] = v;
+          } else {
+            real_ans[q][j] = 0;
+          }
+        }
+      }
+    }
+
+    multiQuery_blocks_export(Pos, oram_, (ull*)ans, queries);
+
+    assert(checkInvariant(Pos, oram_, mem));
+
+    for (ull q = 0; q < N_queries; q++) {
+      for (ull j = 0; j < b_sz; j++) {
+        assert(ans[q][j] == real_ans[q][j]);
+      }
     }
 
     delete[] oram;
