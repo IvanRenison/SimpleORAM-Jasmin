@@ -26,7 +26,7 @@ theory SimpleORAM.
   type cell.
 
   type path   = bool list.
-  type block = cell * path * value.
+  type tuple = cell * path * value.
 
   op path2int (p : path) : int =
     bs2int (true :: p).
@@ -41,7 +41,7 @@ theory SimpleORAM.
   (* -------------------------------------------------------------------- *)
   type oram = {
     height    : int;
-    bucket    : path -> block list;
+    bucket    : path -> tuple list;
     positions : cell -> path;
   }.
 
@@ -73,10 +73,10 @@ theory SimpleORAM.
     var leakage  : leakage list
     var overflow : path -> bool
 
-    proc fetch(oram : oram, c : cell) : oram * block = {
+    proc fetch(oram : oram, c : cell) : oram * tuple = {
       var i, j : int;
       var ps   : path;
-      var v    : block option;
+      var v    : tuple option;
       var pos  : path;
 
       pos <- oram.`positions c;
@@ -85,7 +85,7 @@ theory SimpleORAM.
 
       while (i <= oram.`height) {
         ps      <- take i pos;
-        j       <- find (fun x : block => x.`1 = c) (oram.`bucket ps);
+        j       <- find (fun x : tuple => x.`1 = c) (oram.`bucket ps);
         leakage <- (Read, ps) :: leakage; (* tree reading *)
 
         if (j < size (oram.`bucket ps)) {
@@ -104,10 +104,10 @@ theory SimpleORAM.
       return (oram, oget v);
     }
 
-    proc putback(oram : oram, b : block) : oram = {
-      var root : block list;
+    proc putback(oram : oram, t : tuple) : oram = {
+      var root : tuple list;
 
-      root    <- oram.`bucket [] ++ [b];
+      root    <- oram.`bucket [] ++ [t];
       if (K <= (size root)) {
         overflow <- overflow.[[] <- true];
       }
@@ -120,8 +120,8 @@ theory SimpleORAM.
       var i      : int;
       var p      : path;
       var ps     : path;
-      var pushed : block list;
-      var pback  : block list;
+      var pushed : tuple list;
+      var pback  : tuple list;
 
       p <$ dlist {0,1} oram.`height;
       pushed <- [];
@@ -134,14 +134,14 @@ theory SimpleORAM.
 
         pback <- if i = oram.`height
                  then pushed
-                 else filter (fun block : block =>
-                          (take (i+1) block.`2) <> (take (i+1) p)
+                 else filter (fun tuple : tuple =>
+                          (take (i+1) tuple.`2) <> (take (i+1) p)
                       ) pushed;
 
         pushed <- if i = oram.`height
                  then []
-                 else filter (fun block : block =>
-                         (take (i+1) block.`2) = (take (i+1) p)
+                 else filter (fun tuple : tuple =>
+                         (take (i+1) tuple.`2) = (take (i+1) p)
                       ) pushed;
 
         if (K <= size pback) {
@@ -158,25 +158,25 @@ theory SimpleORAM.
     }
 
     proc oread(oram : oram, c : cell) : oram * value = {
-      var block : block;
+      var tuple : tuple;
       var pos  : path;
 
-      (oram, block) <@ fetch(oram, c);
+      (oram, tuple) <@ fetch(oram, c);
       pos  <$ dlist {0,1} oram.`height;
       oram <- {| oram with positions = oram.`positions.[c <- pos] |};
-      oram <@ putback(oram, (c, pos, block.`3));
+      oram <@ putback(oram, (c, pos, tuple.`3));
       oram <@ flush(oram);
 
-      return (oram, block.`3);
+      return (oram, tuple.`3);
     }
 
     proc owrite(oram : oram, c : cell, v : value) : oram * value = {
-      var block : block;
+      var tuple : tuple;
       var pos  : path;
       var tmpo : oram option;
       var aout : (oram * value option) option;
 
-      (oram, block) <@ fetch(oram, c);
+      (oram, tuple) <@ fetch(oram, c);
       pos  <$ dlist {0,1} oram.`height;
       oram <- {| oram with positions = oram.`positions.[c <- pos] |};
       oram <@ putback(oram, (c, pos, v));
@@ -215,18 +215,18 @@ theory SimpleORAM.
 
        (* only cells in the map are on the tree *)
     && (forall (p : path), size p <= o.`height =>
-          (forall block, block \in o.`bucket p =>
-              (C block.`1)))
+          (forall tuple, tuple \in o.`bucket p =>
+              (C tuple.`1)))
 
-       (* Path invariant: there exists a block holding the cell in the path
+       (* Path invariant: there exists a tuple holding the cell in the path
           to its position *)
     && (forall (c : cell), C c =>
           let p = o.`positions c in
           (exists i, 0 <= i <= o.`height &&
-            let block = o.`bucket (take i p) in
-            has (fun (block : block) => block.`1 = c /\ block.`2 = p) block))
+            let tuple = o.`bucket (take i p) in
+            has (fun (tuple : tuple) => tuple.`1 = c /\ tuple.`2 = p) tuple))
 
-       (* Duplicates freeness: take any two bucket: same cell implies same block *)
+       (* Duplicates freeness: take any two bucket: same cell implies same tuple *)
     && (forall (p1 p2 : path),
           let bucket1 = o.`bucket p1 in
           let bucket2 = o.`bucket p2 in
@@ -238,10 +238,10 @@ theory SimpleORAM.
        (* Well formness of bucket: bucket contain correct position for held cell *)
     && (forall (p : path), (size p <= o.`height) =>
           forall i, 0 <= i <= o.`height =>
-            let block = o.`bucket (take i p) in
-            forall (b : block), b \in block =>
-              o.`positions b.`1 = b.`2 && 
-              take (if i <= size p then i else size p) b.`2 = 
+            let tuple = o.`bucket (take i p) in
+            forall (t : tuple), t \in tuple =>
+              o.`positions t.`1 = t.`2 &&
+              take (if i <= size p then i else size p) t.`2 =
                 take (if i <= size p then i else size p) p).
 
    lemma is_oram_height_gt0 (C : cell -> bool) (oram : oram) :
@@ -267,15 +267,15 @@ theory SimpleORAM.
   module SimpleORAM = {
     var leakage : sleakage list
 
-    proc fetch(oram : soram, c : cell) : soram * block = {
-      var b <- oram.`smap c;
+    proc fetch(oram : soram, c : cell) : soram * tuple = {
+      var t <- oram.`smap c;
 
-      leakage <- Fetch b.`1 :: leakage;
-      return (oram, (c, b.`1, b.`2));
+      leakage <- Fetch t.`1 :: leakage;
+      return (oram, (c, t.`1, t.`2));
     }
 
-    proc putback(oram : soram, b : block) : soram = {
-      oram <- {| oram with smap = oram.`smap.[b.`1 <- (b.`2, b.`3)] |};
+    proc putback(oram : soram, t : tuple) : soram = {
+      oram <- {| oram with smap = oram.`smap.[t.`1 <- (t.`2, t.`3)] |};
       leakage <- Putback :: leakage;
       return oram;
     }
@@ -290,24 +290,24 @@ theory SimpleORAM.
     }
 
     proc oread(oram : soram, c : cell) : soram * value = {
-      var block : block;
+      var tuple : tuple;
       var pos  : path;
 
-      (oram, block) <@ fetch(oram, c);
+      (oram, tuple) <@ fetch(oram, c);
       pos  <$ dlist {0,1} oram.`sheight;
-      oram <@ putback(oram, (block.`1, pos, block.`3));
+      oram <@ putback(oram, (tuple.`1, pos, tuple.`3));
       oram <@ flush(oram);
 
-      return (oram, block.`3);
+      return (oram, tuple.`3);
     }
 
     proc owrite(oram : soram, c : cell, v : value) : soram * value = {
-      var block : block;
+      var tuple : tuple;
       var pos  : path;
       var tmpo : oram option;
       var aout : (oram * value option) option;
 
-      (oram, block) <@ fetch(oram, c);
+      (oram, tuple) <@ fetch(oram, c);
       pos  <$ dlist {0,1} oram.`sheight;
       oram <@ putback(oram, (c, pos, v));
       oram <@ flush(oram);
@@ -353,8 +353,8 @@ theory SimpleORAM.
     && (forall c, _C c => _oram.`positions c = (_soram.`smap c).`1)
     (* all the values are the same *)
     && (forall p, size p <= _oram.`height =>
-          let block = _oram.`bucket p in
-          forall b, b \in block => (_C b.`1) => b.`3 = (_soram.`smap b.`1).`2)
+          let tuple = _oram.`bucket p in
+          forall t, t \in tuple => (_C t.`1) => t.`3 = (_soram.`smap t.`1).`2)
     && is_oram _C _oram
     && is_soram _soram.
 
@@ -424,7 +424,7 @@ lemma uniq_cells  (_oram : oram) (_p  : path) (_i : int) :
              bucket1.`1 = bucket2.`1 => p1 = p2 /\ i1 = i2) =>
   size _p = _oram.`height =>
   0 <= _i <= _oram.`height =>
-   uniq (map (fun (b : block) => b.`1) (_oram.`bucket (take _i _p))).
+   uniq (map (fun (t : tuple) => t.`1) (_oram.`bucket (take _i _p))).
 proof.
 rewrite /is_oram => /> *; apply nth_uniq => i j *.
 by rewrite !(nth_map witness) /=;smt(List.size_map).
@@ -445,10 +445,10 @@ lemma find_cat_out (s1 s2 : 'a list) (P : 'a -> bool) :
  <=> (size s1 <= find P s1 /\ size s2 <= find P s2).
 proof. by rewrite !lezNgt /= -!find_rng_out has_cat /#. qed.
 
-lemma block_props (_C : cell -> bool) (_oram) (b : block) (_p : path) :
-    is_oram _C _oram => size _p <= _oram.`height => b \in _oram.`bucket _p =>
-      _C b.`1 => (_oram.`positions b.`1 = b.`2 /\
-              take (size _p) b.`2 = _p).
+lemma tuple_props (_C : cell -> bool) (_oram) (t : tuple) (_p : path) :
+    is_oram _C _oram => size _p <= _oram.`height => t \in _oram.`bucket _p =>
+      _C t.`1 => (_oram.`positions t.`1 = t.`2 /\
+              take (size _p) t.`2 = _p).
 proof.
 auto => />? H H0 H1 H2 H3 H4 H5 H6;smt(take_size).
 qed.
@@ -492,18 +492,18 @@ export Aux.
 
        (* only cells in the map are on the tree *)
     && (forall (p : path), size p <= o.`height =>
-          (forall block, block \in o.`bucket p =>
-              block.`1 <> _c => (C block.`1)))
+          (forall tuple, tuple \in o.`bucket p =>
+              tuple.`1 <> _c => (C tuple.`1)))
 
-       (* Path invariant: there exists a block holding the cell in the path
+       (* Path invariant: there exists a tuple holding the cell in the path
           to its position *)
     && (forall (c : cell), (predI C (predC1 _c)) c =>
           let p = o.`positions c in
           (exists i, 0 <= i <= o.`height &&
-            let block = o.`bucket (take i p) in
-            has (fun (block : block) => block.`1 = c /\ block.`2 = p) block))
+            let tuple = o.`bucket (take i p) in
+            has (fun (tuple : tuple) => tuple.`1 = c /\ tuple.`2 = p) tuple))
 
-       (* Duplicates freeness: take any two bucket: same cell implies same block *)
+       (* Duplicates freeness: take any two bucket: same cell implies same tuple *)
     && (forall (p1 p2 : path),
           let bucket1 = o.`bucket p1 in
           let bucket2 = o.`bucket p2 in
@@ -515,10 +515,10 @@ export Aux.
        (* Well formness of bucket: bucket contain correct position for held cell *)
     && (forall (p : path), (size p <= o.`height) =>
           forall i, 0 <= i <= o.`height =>
-            let block = o.`bucket (take i p) in
-            forall (b : block), b \in block =>
-              o.`positions b.`1 = b.`2 && 
-              take (if i <= size p then i else size p) b.`2 = 
+            let tuple = o.`bucket (take i p) in
+            forall (t : tuple), t \in tuple =>
+              o.`positions t.`1 = t.`2 &&
+              take (if i <= size p then i else size p) t.`2 =
                 take (if i <= size p then i else size p) p).
 
   op oram_rel_fetch (_C : cell -> bool) (_c : cell) (_h : int) (_oram : oram) (_soram : soram) =
@@ -528,8 +528,8 @@ export Aux.
     && (forall c, _C c => _oram.`positions c = (_soram.`smap c).`1)
     (* all the values are the same *)
     && (forall p, size p <= _oram.`height =>
-          let block = _oram.`bucket p in
-          forall b, b \in block => (_C b.`1) => b.`3 = (_soram.`smap b.`1).`2)
+          let tuple = _oram.`bucket p in
+          forall t, t \in tuple => (_C t.`1) => t.`3 = (_soram.`smap t.`1).`2)
     && is_oram_fetch _C _c _oram
     && is_soram _soram.
 
@@ -537,28 +537,28 @@ export Aux.
        is_oram C o => is_oram_fetch C c0 o.
    proof.
    rewrite /is_oram /is_oram_fetch => /> *; do! split.
-   + move => p ? block * /#.
+   + move => p ? tuple * /#.
    + move => ? c * /#.
    qed.
 
-  lemma is_oram_is_oram_putback (C : cell -> bool) (o : oram) (b : block) :
+  lemma is_oram_is_oram_putback (C : cell -> bool) (o : oram) (t : tuple) :
       is_oram C o
-   => !C b.`1
-   => o.`positions b.`1 = b.`2
-   => is_oram (predU C (pred1 b.`1))
-        {| height = o.`height; bucket = o.`bucket.[[] <- o.`bucket [] ++ [b]]; positions = o.`positions; |}.
+   => !C t.`1
+   => o.`positions t.`1 = t.`2
+   => is_oram (predU C (pred1 t.`1))
+        {| height = o.`height; bucket = o.`bucket.[[] <- o.`bucket [] ++ [t]]; positions = o.`positions; |}.
   proof.
   move => /> //= ???? He ? Hf *; do! split.
     - smt().
     - move => *; split; 1: smt(mem_cat).
     - move => *; split.
       move => c.
-      case: (c = b.`1) => *.
+      case: (c = t.`1) => *.
       + exists 0 => //=.
         split => *; 1: by smt().
         rewrite take0 /"_.[_<-_]" //= has_cat; right.
         rewrite hasP.
-        exists b => //= /#.
+        exists t => //= /#.
       + move : (He c _); 1: smt().
         move => Hec; elim Hec => i Hi; exists i => * /=.
         by rewrite hasP in Hi; rewrite hasP; smt(mem_cat).
@@ -579,15 +579,15 @@ export Aux.
         case (i2 = size (o.`bucket []));2:smt().
         + move => ?????; rewrite ifF 1:/# ifF 1:/# ifT 1:/#.
           by smt(List.size_ge0 size_cat size_nseq mem_nth).
-    + move => ? p ? i ?? _b;rewrite /"_.[_<-_]" /=.
+    + move => ? p ? i ?? _t;rewrite /"_.[_<-_]" /=.
       case (p = [] \/ i <= 0).
       + move => ?; rewrite ifT 1:/# /= mem_cat /= => H; elim H.
-        + move => *; move : (Hf p _ 0 _ _b _);smt().
+        + move => *; move : (Hf p _ 0 _ _t _);smt().
         + by move => Hb; smt(take0 List.size_ge0).
       + by move => ?; rewrite ifF; smt().
   qed.
 
-  lemma is_oram_bbpp (C : cell -> bool) (o : oram) (bb1 bb2 : block) (p1 p2 : path) :
+  lemma is_oram_bbpp (C : cell -> bool) (o : oram) (bb1 bb2 : tuple) (p1 p2 : path) :
       is_oram C o
    => bb1 \in o.`bucket p1
    => bb2 \in o.`bucket p2
@@ -602,31 +602,31 @@ export Aux.
 
   lemma case_elim p q: ((p => q) /\ (!p => q)) <=> q.
   proof. by smt(). qed.
-  lemma is_oram_is_oram_flush (C : cell -> bool) (oram : oram) (o : oram) (i : int) (p : path) (pushed : block list) :
-      let stayhere: block list =
+  lemma is_oram_is_oram_flush (C : cell -> bool) (oram : oram) (o : oram) (i : int) (p : path) (pushed : tuple list) :
+      let stayhere: tuple list =
           if i = oram.`height then
             pushed ++ oram.`bucket (take i p)
           else
             filter
-              (fun (block : block) =>
-                 take (i + 1) block.`2 <> take (i + 1) p)
+              (fun (tuple : tuple) =>
+                 take (i + 1) tuple.`2 <> take (i + 1) p)
               (pushed ++ oram.`bucket (take i p)) in
-      let newpushed: block list =
+      let newpushed: tuple list =
           if i = oram.`height then []
           else
             filter
-              (fun (block : block) =>
-                 take (i + 1) block.`2 = take (i + 1) p)
+              (fun (tuple : tuple) =>
+                 take (i + 1) tuple.`2 = take (i + 1) p)
               (pushed ++ oram.`bucket (take i p)) in
       0 <= i <= oram.`height
    => is_oram C o
-   => is_oram (predI C (fun cc => size pushed <= find (fun (b : block) => b.`1 = cc) pushed)) oram
+   => is_oram (predI C (fun cc => size pushed <= find (fun (t : tuple) => t.`1 = cc) pushed)) oram
 
    => size p = oram.`height
    => oram.`height = o.`height
    => oram.`positions = o.`positions
 
-     (* block is in pushed iff it was higher up in the path of o, agress on the flushing path p, and it's not in the higher path of the current oram *)
+     (* tuple is in pushed iff it was higher up in the path of o, agress on the flushing path p, and it's not in the higher path of the current oram *)
    => (forall bb, bb \in pushed <=>
              (i <= o.`height
            /\ take i bb.`2 = take i p
@@ -639,12 +639,12 @@ export Aux.
            => i1 = i2)
      (* Whatever is in current oram first levels is not in pushed and it was somewhere above in the original o *)
    => (forall _p, size _p < i =>
-          (all (fun (block : block) =>
-            !block \in pushed /\
-             (exists ii, 0<= ii <= size _p /\ block \in o.`bucket (take ii _p))) (oram.`bucket _p)))
+          (all (fun (tuple : tuple) =>
+            !tuple \in pushed /\
+             (exists ii, 0<= ii <= size _p /\ tuple \in o.`bucket (take ii _p))) (oram.`bucket _p)))
      (* Whatever is in current oram later levels is untouched from o *)
    => (forall _p, i <= size _p <= oram.`height => oram.`bucket _p = o.`bucket _p)
-   => is_oram (predI C (fun cc => size newpushed <= find (fun (b : block) => b.`1 = cc) newpushed))
+   => is_oram (predI C (fun cc => size newpushed <= find (fun (t : tuple) => t.`1 = cc) newpushed))
         {| height = oram.`height; bucket =
             oram.`bucket.[take i p <- stayhere]; positions =
             oram.`positions; |}.
@@ -652,25 +652,25 @@ export Aux.
   move => stayhere newpushed ? ^? /> 4? Hbase Hinjb Hps ???? H0 ? H01 3? H3 H4 H1 H2 *.
 
   (* setting the ground *)
-  have ? : forall b, (!b \in newpushed /\ !b \in stayhere) => !b \in pushed.
+  have ? : forall t, (!t \in newpushed /\ !t \in stayhere) => !t \in pushed.
   + case (i = oram.`height); 1: by smt(mem_cat).
-    by rewrite /newpushed /stayhere => ->b /=; rewrite !mem_filter !mem_cat /#.
+    by rewrite /newpushed /stayhere => ->t /=; rewrite !mem_filter !mem_cat /#.
 
-  have ? : forall b, b \in stayhere => !b \in pushed => b \in oram.`bucket (take i p).
+  have ? : forall t, t \in stayhere => !t \in pushed => t \in oram.`bucket (take i p).
   + rewrite /stayhere;case (i = oram.`height) => ?/=;1: by smt(mem_cat).
-     by move => b;rewrite !mem_filter !mem_cat /#.
+     by move => t;rewrite !mem_filter !mem_cat /#.
 
-  have H_newpushed_not_pushed : forall b, b \in newpushed => !b \in pushed => b \in oram.`bucket (take i p).
+  have H_newpushed_not_pushed : forall t, t \in newpushed => !t \in pushed => t \in oram.`bucket (take i p).
   + rewrite /newpushed;case (i = oram.`height) => ?/=;1: by smt(mem_cat).
-     by move => b;rewrite !mem_filter !mem_cat /#.
+     by move => t;rewrite !mem_filter !mem_cat /#.
 
-  have ? : forall b, b \in stayhere => !b \in newpushed.
+  have ? : forall t, t \in stayhere => !t \in newpushed.
   + rewrite /stayhere /newpushed;case (i = oram.`height) => ?/=;1: by smt(mem_cat).
-     by move => b;rewrite !mem_filter !mem_cat /#.
+     by move => t;rewrite !mem_filter !mem_cat /#.
 
-  have ? : forall b, !b \in stayhere => !b \in newpushed => !b \in oram.`bucket (take i p).
+  have ? : forall t, !t \in stayhere => !t \in newpushed => !t \in oram.`bucket (take i p).
   + rewrite /stayhere /newpushed;case (i = oram.`height) => ?/=;1: by smt(mem_cat).
-     by move => b;rewrite !mem_filter !mem_cat /#.
+     by move => t;rewrite !mem_filter !mem_cat /#.
 
   have ?: forall bb1 bb2, bb1 \in stayhere => bb2 \in newpushed => bb1.`2 <> bb2.`2.
   + rewrite /stayhere /newpushed => bb1 bb2.
@@ -679,26 +679,26 @@ export Aux.
 
   have Hsep : forall bb pp, size pp <= oram.`height =>
        bb \in oram.`bucket.[take i p <- stayhere] pp =>
-        size newpushed <= find (fun (b : block) => b.`1 = bb.`1) newpushed.
+        size newpushed <= find (fun (t : tuple) => t.`1 = bb.`1) newpushed.
   + move => bb pp ??.
-    have [ _ Hin]  := find_rng_in newpushed (fun (b : block) => b.`1 = bb.`1).
+    have [ _ Hin]  := find_rng_in newpushed (fun (t : tuple) => t.`1 = bb.`1).
     rewrite implybE in Hin;elim Hin;1: by smt(find_ge0).
     rewrite hasP=> Hex;elim Hex => b2 /= *.
     case (b2 \in stayhere) => *; 1: by smt().
-    case (i < size pp) => *.  (* block is below *)
+    case (i < size pp) => *.  (* tuple is below *)
      + have ? : bb \in o.`bucket pp by smt(size_take).
-       pose i1 := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket pp).
-       have i1b := find_rng_in (o.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+       pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket pp).
+       have i1b := find_rng_in (o.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
        case (b2 \in pushed) => Hb2.
          + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-           pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p)).
+           pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p)).
            have := Hinjb (take i2' p) pp i2f i1 _ _ _;2,4:smt(size_take nth_find mem_nth).
-           + have := (find_rng_in (o.`bucket (take i2' p)) (fun (bf : block) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
-           have /= := nth_find witness (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _.
+           + have := (find_rng_in (o.`bucket (take i2' p)) (fun (bf : tuple) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
+           have /= := nth_find witness (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _.
            + rewrite ? ha /= hasP.
              exists b2.
              by smt().
-           have /= := nth_find witness (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _.
+           have /= := nth_find witness (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _.
            + rewrite ? ha /= hasP.
              exists bb.
              by smt().
@@ -706,82 +706,82 @@ export Aux.
        have ? : b2 \in o.`bucket (take i p).
        + have ? : b2 \in oram.`bucket (take i p) by smt().
          by smt(size_take).
-       pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i p)).
+       pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i p)).
        have := Hinjb (take i p) pp i2f i1 _ _ _.
-       + have := find_rng_in (o.`bucket (take i p)) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+       + have := find_rng_in (o.`bucket (take i p)) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
        + smt().
-       + have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i p)) _;1: by rewrite hasP /=; smt().
-         have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+       + have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i p)) _;1: by rewrite hasP /=; smt().
+         have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
        smt(size_take).
 
      case (size pp < i) => *.
-     (* block is above *)
+     (* tuple is above *)
      + have ? : pp <> take i p by smt(size_take).
        move : (H1 pp _); 1: by smt().
        rewrite allP => /> Hbs; move : (Hbs bb _);1:smt().
        move =>  [#? Hex];elim Hex => i1' *.
        have ? : bb \in o.`bucket (take i1' pp) by smt().
-       pose i1f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i1' pp)).
+       pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i1' pp)).
        case (b2 \in pushed) => Hb2.
          + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-           pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p)).
+           pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p)).
            have := Hinjb (take i2' p) (take i1' pp) i2f i1f _ _ _; 4:  by smt().
-           + have := find_rng_in (o.`bucket (take i2' p)) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-           + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-           + have /= ? := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _; 1: by rewrite ?hasP /#.
+           + have := find_rng_in (o.`bucket (take i2' p)) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+           + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+           + have /= ? := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _; 1: by rewrite ?hasP /#.
              rewrite /"_.[_]" &(eq_trans _ bb.`1).
              + smt().
              + rewrite /i1f &(eq_sym_imp).
-               apply (nth_find witness (fun (b0 : block) => b0.`1 = bb.`1) (o.`bucket (take i1' pp))).
+               apply (nth_find witness (fun (b0 : tuple) => b0.`1 = bb.`1) (o.`bucket (take i1' pp))).
                apply List.hasP.
                by exists bb => //=.
 
          + have ? : b2 \in o.`bucket (take i p) by smt(size_take).
-           pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i p)).
+           pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i p)).
            have := Hinjb (take i p) (take i1' pp) i2f i1f _ _ _;4:smt(size_take).
-           + have := find_rng_in (o.`bucket (take i p)) (fun (bf : block) => bf.`1 = b2.`1); 1: by rewrite hasP /#.
-           + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-           + have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i p)) _;1: by rewrite ?hasP;smt(nth_find).
-           have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
+           + have := find_rng_in (o.`bucket (take i p)) (fun (bf : tuple) => bf.`1 = b2.`1); 1: by rewrite hasP /#.
+           + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+           + have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i p)) _;1: by rewrite ?hasP;smt(nth_find).
+           have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
 
-     + (* block is at this level *)
+     + (* tuple is at this level *)
        case (pp = take i p) => *; last first.
        + have Hinn : bb \in o.`bucket pp by smt().
-       pose i1 := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket pp).
-       have i1b := find_rng_in (o.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+       pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket pp).
+       have i1b := find_rng_in (o.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
        case (b2 \in pushed) => Hb2.
          + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-           pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p)).
+           pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p)).
            have := Hinjb (take i2' p) pp i2f i1 _ _ _;2,4:smt(size_take).
-           + have := find_rng_in (o.`bucket (take i2' p)) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-           have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _;1: by rewrite ?hasP;smt(nth_find).
-           have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+           + have := find_rng_in (o.`bucket (take i2' p)) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+           have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _;1: by rewrite ?hasP;smt(nth_find).
+           have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
 
          have ? : b2 \in o.`bucket (take i p) by smt(size_take).
-         pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i p)).
+         pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i p)).
          have := Hinjb (take i p) pp i2f i1 _ _ _;2,4:smt(size_take).
-         + have := find_rng_in (o.`bucket (take i p)) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-         + have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i p)) _;1: by rewrite ?hasP /=; smt().
-         have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+         + have := find_rng_in (o.`bucket (take i p)) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+         + have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i p)) _;1: by rewrite ?hasP /=; smt().
+         have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
 
      + have ? : bb \in stayhere;1: by smt().
        case (bb \in pushed) => Hpps;last first.
        +  have ? : bb \in (o.`bucket pp) by smt().
-          pose i1 := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket pp).
-          have i1b := find_rng_in (o.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+          pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket pp).
+          have i1b := find_rng_in (o.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
           case (b2 \in pushed) => Hb2.
            + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-             pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p)).
+             pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p)).
              have := Hinjb (take i2' p) pp i2f i1 _ _ _;2,4:smt().
-             + have := find_rng_in (o.`bucket (take i2' p)) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-             have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _;1: by rewrite ?hasP /=; smt().
-           have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+             + have := find_rng_in (o.`bucket (take i2' p)) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+             have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p)) _;1: by rewrite ?hasP /=; smt().
+           have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
 
           have ? : b2 \in o.`bucket (take i p) by smt().
-          pose i2f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i p)).
+          pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i p)).
           have := Hinjb (take i p) pp i2f i1 _ _ _; 2, 4: smt().
-          + by have := find_rng_in (o.`bucket (take i p)) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-          + by have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i p)) _; by rewrite ?hasP /=; smt().
+          + by have := find_rng_in (o.`bucket (take i p)) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+          + by have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i p)) _; by rewrite ?hasP /=; smt().
 
           case (b2 \in pushed) => Hb2.
            + pose i1f := find (pred1 bb) pushed.
@@ -789,27 +789,27 @@ export Aux.
              move : (H4 i1f i2f) ; smt().
 
           move : (H3 bb);rewrite Hpps /= => [#?? Hex];elim Hex => i1' *.
-          pose i1f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i1' p)).
+          pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i1' p)).
           have ? : b2 \in o.`bucket (take i p) by smt().
-          pose i2f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i p)).
+          pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i p)).
           have := Hinjb (take i p) (take i1' p) i2f i1f _ _ _;3..:smt().
-          + have := find_rng_in (o.`bucket (take i p)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-          + have := find_rng_in (o.`bucket (take i1' p)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+          + have := find_rng_in (o.`bucket (take i p)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+          + have := find_rng_in (o.`bucket (take i1' p)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
 
     have Hinjf : forall bb1 bb2 pp1 pp2, bb1 \in o.`bucket pp1 => bb2 \in o.`bucket pp2 =>
               bb1.`1 = bb2.`1 => pp1 <> pp2 => false.
       move => bb1 bb2 pp1 pp2 Hl1 Hl2 Hl3 Hl4.
-      pose i1f := find (fun (bf : block) => bf.`1 = bb1.`1) (o.`bucket pp1).
-      pose i2f := find (fun (bf : block) => bf.`1 = bb2.`1) (o.`bucket pp2).
+      pose i1f := find (fun (bf : tuple) => bf.`1 = bb1.`1) (o.`bucket pp1).
+      pose i2f := find (fun (bf : tuple) => bf.`1 = bb2.`1) (o.`bucket pp2).
       have := Hinjb pp1 pp2 i1f i2f _ _ _.
-           + have := find_rng_in (o.`bucket pp1) (fun (bf : block) => bf.`1 = bb1.`1); rewrite hasP; smt().
-           + have := find_rng_in (o.`bucket pp2) (fun (bf : block) => bf.`1 = bb2.`1); rewrite hasP; smt().
-             have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb1.`1)(o.`bucket pp1)_;1: by rewrite ?hasP /=; smt().
-           have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb2.`1) (o.`bucket pp2)  _; by rewrite ?hasP /=; smt().
+           + have := find_rng_in (o.`bucket pp1) (fun (bf : tuple) => bf.`1 = bb1.`1); rewrite hasP; smt().
+           + have := find_rng_in (o.`bucket pp2) (fun (bf : tuple) => bf.`1 = bb2.`1); rewrite hasP; smt().
+             have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb1.`1)(o.`bucket pp1)_;1: by rewrite ?hasP /=; smt().
+           have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb2.`1) (o.`bucket pp2)  _; by rewrite ?hasP /=; smt().
            by smt(size_take).
 
      (* pushed{hr} + bucket (take i{hr} p{m}) = stayhere + newpushed *)
-     have ?: forall b, (b \in pushed \/ b \in (oram.`bucket (take i p))) <=> (b \in stayhere \/ b \in newpushed).
+     have ?: forall t, (t \in pushed \/ t \in (oram.`bucket (take i p))) <=> (t \in stayhere \/ t \in newpushed).
      + smt().
 
      (* pushed{hr} /\ bucket (take i p) = \emptyset *)
@@ -824,7 +824,7 @@ export Aux.
        by smt(size_take).
 
      (* stayhere /\ newpushed = \emptyset *)
-     have ?: forall b, (b \in stayhere) => !(b \in newpushed).
+     have ?: forall t, (t \in stayhere) => !(t \in newpushed).
      + smt().
 
      + move=> *; split.
@@ -840,11 +840,11 @@ export Aux.
 
        move=> /> *; split.
        + move => c Hc Hnh.
-         case (size stayhere <= find (fun (b : block) => b.`1 = c) stayhere) => Hcs; last first.
+         case (size stayhere <= find (fun (t : tuple) => t.`1 = c) stayhere) => Hcs; last first.
          + (* storing it now: it's in stayhere *)
            exists i; split => *; 1: smt().
-           have  := find_rng_in stayhere (fun (b : block) => b.`1 = c). (* Question. *)
-           have -> /= : 0 <= find (fun (b : block) => b.`1 = c) stayhere < size stayhere
+           have  := find_rng_in stayhere (fun (t : tuple) => t.`1 = c). (* Question. *)
+           have -> /= : 0 <= find (fun (t : tuple) => t.`1 = c) stayhere < size stayhere
                 by smt(List.size_ge0 find_ge0).
            rewrite hasP => Hex; elim Hex => bb *.
            rewrite hasP; exists bb.
@@ -852,23 +852,23 @@ export Aux.
           + (* already in tree *)
             move : (H0 c _).
             + rewrite /predI /=;split;1:smt().
-              have  := find_rng_out stayhere (fun (b : block) => b.`1 = c).
-              have  := find_rng_out newpushed (fun (b : block) => b.`1 = c).
-              have  := find_rng_out pushed (fun (b : block) => b.`1 = c).
+              have  := find_rng_out stayhere (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out newpushed (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out pushed (fun (t : tuple) => t.`1 = c).
               rewrite !hasP !negb_exists //=.
               smt().
             move => H0c; elim H0c => i' [#?? Hb]; exists i';do split;1,2:smt().
             rewrite hasP in Hb; elim Hb => bb /= *.
             rewrite hasP; exists bb => /=.
-            case (i' < i) => *; 1: by smt(size_take). (* block is below *)
+            case (i' < i) => *; 1: by smt(size_take). (* tuple is below *)
             case (i = i') => *; last by smt(size_take).
             + have ? : take i p <> (take i' (oram.`positions c)); last by smt().
-              have  := find_rng_out stayhere (fun (b : block) => b.`1 = c).
-              have  := find_rng_out newpushed (fun (b : block) => b.`1 = c).
-              have  := find_rng_out (oram.`bucket (take (i) p)) (fun (b : block) => b.`1 = c).
+              have  := find_rng_out stayhere (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out newpushed (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out (oram.`bucket (take (i) p)) (fun (t : tuple) => t.`1 = c).
               rewrite !hasP !negb_exists /=.
-              have -> /= : ! find (fun (b : block) => b.`1 = c) newpushed < size newpushed by smt().
-              have -> /= : ! find (fun (b : block) => b.`1 = c) stayhere < size stayhere by smt().
+              have -> /= : ! find (fun (t : tuple) => t.`1 = c) newpushed < size newpushed by smt().
+              have -> /= : ! find (fun (t : tuple) => t.`1 = c) stayhere < size stayhere by smt().
               move => Hib Hinp Hish; move : (Hinp bb); move : (Hish bb); rewrite  (: bb.`1 = c) 1:/# /=.
               by smt().
 
@@ -899,8 +899,8 @@ export Aux.
 
            + have /= HH := (filter_inj
                    (pushed ++ oram.`bucket (take i p))
-                   (fun (b : block) => b.`1)
-                   (fun (block : block) => take (i + 1) block.`2 <> take (i + 1) p)).
+                   (fun (t : tuple) => t.`1)
+                   (fun (tuple : tuple) => take (i + 1) tuple.`2 <> take (i + 1) p)).
              have ? : (forall (i1 i2 : int),
                0 <= i1 < size (pushed ++ oram.`bucket (take i p)) =>
                0 <= i2 < size (pushed ++ oram.`bucket (take i p)) =>
@@ -1059,8 +1059,8 @@ lemma equiv_fetch (_C : cell -> bool) (_oram : oram) (_soram : soram) (_c : cell
       /\  (oram_rel (predI _C (predC1 _c)) _h res{1}.`1 res{2}.`1)
       /\  (forall p i, 0 <= i <= res{1}.`1.`height =>
                            size p = res{1}.`1.`height =>
-                let block = res{1}.`1.`bucket (take i p) in
-                 !(has (fun (block : block) => block.`1 = _c) block))
+                let tuple = res{1}.`1.`bucket (take i p) in
+                 !(has (fun (tuple : tuple) => tuple.`1 = _c) tuple))
       /\ (_C _c => (res{1}.`2 = res{2}.`2 /\ res{2}.`2.`1 = _c))
       /\ leakage_rel _h ORAM.leakage{1} SimpleORAM.leakage{2}
   ].
@@ -1068,7 +1068,7 @@ lemma equiv_fetch (_C : cell -> bool) (_oram : oram) (_soram : soram) (_c : cell
   proc => /=; sp; elim* => _sl2.
   exists* ORAM.leakage{1}; elim* => _l1.
   while {1} (0 <= i{1} <= _h + 1
-    /\ pos{1} = b{2}.`1
+    /\ pos{1} = t{2}.`1
     /\ ={c}
     /\ c{2} = _c
     /\ pos{1} = oram{1}.`positions c{1}
@@ -1081,19 +1081,19 @@ lemma equiv_fetch (_C : cell -> bool) (_oram : oram) (_soram : soram) (_c : cell
     /\ oram_rel_fetch _C _c _h oram{1} oram{2}
     /\ (forall _p _i, 0 <= _i < i{1} =>
                             size _p = oram{1}.`height =>
-                let block = oram{1}.`bucket (take _i _p) in
-                 !(has (fun (block : block) => block.`1 = _c) block))
+                let tuple = oram{1}.`bucket (take _i _p) in
+                 !(has (fun (tuple : tuple) => tuple.`1 = _c) tuple))
     /\ (forall ii pp, (i{1} <= ii <= _h => size pp = _h =>
            oram{1}.`bucket (take ii pp) = _oram.`bucket (take ii pp)))
     /\ (_C _c =>(forall ii, (0 <= ii < i{1} /\
-            (has (fun (block : block) => block.`1 = _c) (_oram.`bucket (take ii pos{1}))))
+            (has (fun (tuple : tuple) => tuple.`1 = _c) (_oram.`bucket (take ii pos{1}))))
           => v{1} =
-               let j = find (fun (block : block) => block.`1 = _c)
+               let j = find (fun (tuple : tuple) => tuple.`1 = _c)
                  (_oram.`bucket (take ii pos{1})) in Some (_oram.`bucket (take ii pos{1})).[j]))
     /\ (leakage_rel _h _l1 _sl2)
-    /\ (leakage_rel (i{1}-1) (take (2*i{1}) ORAM.leakage{1}) [Fetch b{2}.`1])
+    /\ (leakage_rel (i{1}-1) (take (2*i{1}) ORAM.leakage{1}) [Fetch t{2}.`1])
     /\ drop (2*i{1}) ORAM.leakage{1} = _l1
-    /\ SimpleORAM.leakage{2} = Fetch b{2}.`1 :: _sl2
+    /\ SimpleORAM.leakage{2} = Fetch t{2}.`1 :: _sl2
   ) (_h + 1 - i){1}.
   + move => &2;auto => /> &1 [#] 9? Hii 22? He Hi Hf 2? H1 H H0 leakage 2? /=;do split.
     + move => * /=; do split;1,2,8..: by smt(rangeSr rev_rcons flatten_cons flatten1).
@@ -1103,24 +1103,24 @@ lemma equiv_fetch (_C : cell -> bool) (_oram : oram) (_soram : soram) (_c : cell
         move => *;split.
         + move => _c0 Hc Hnc0; elim (He _c0 _);1:smt().
           move => ip [Hip Heip]; exists ip;split;1:smt().
-          move => Hipp /=;rewrite hasP in Heip;elim Heip => /= b' Hb.
-          rewrite hasP => /=; exists b';split;2:smt().
+          move => Hipp /=;rewrite hasP in Heip;elim Heip => /= t' Hb.
+          rewrite hasP => /=; exists t';split;2:smt().
           by smt(trim_mem).
         by smt(mem_trim find_trim_lt find_trim_ge size_trim trim_id).
       + move => pp ii???.
         case (ii = i{1}); 2: by smt(size_take).
         move => Hii1; rewrite Hii1 /=.
-        case(take i{1} b{2}.`1 = take i{1} pp);1: by
+        case(take i{1} t{2}.`1 = take i{1} pp);1: by
          move => -> /=; rewrite /"_.[_<-_]" /=;apply mem_uniq_triple;apply uniq_cells => /#. 
         move => Hpp; rewrite  /"_.[_<-_]" Hpp /= H 1,2:/# hasP negb_exists /= /#.
 
       + by smt(size_take).
 
       + move => Hc ii il ih Hiii.
-        have ? : ii = i{1}; last by  move : (Hi (take i{1} b{2}.`1) (take ii b{2}.`1));smt().
-        pose ii1 := find (fun (x : block) => x.`1 = c{2}) (_oram.`bucket (take i{1} b{2}.`1)).
-        pose ii2 := find (fun (x : block) => x.`1 = c{2}) (_oram.`bucket (take ii b{2}.`1)).
-        by move : (Hii (take i{1} b{2}.`1) (take ii b{2}.`1) ii1 ii2);
+        have ? : ii = i{1}; last by  move : (Hi (take i{1} t{2}.`1) (take ii t{2}.`1));smt().
+        pose ii1 := find (fun (x : tuple) => x.`1 = c{2}) (_oram.`bucket (take i{1} t{2}.`1)).
+        pose ii2 := find (fun (x : tuple) => x.`1 = c{2}) (_oram.`bucket (take ii t{2}.`1)).
+        by move : (Hii (take i{1} t{2}.`1) (take ii t{2}.`1) ii1 ii2);
               smt(nth_find find_rng_in find_rng_out find_max).
     + rewrite !ifF 1,2:/# /leakages_of_sleakages /=.
       simplify leakages_of_sleakage => /=.
@@ -1133,7 +1133,7 @@ lemma equiv_fetch (_C : cell -> bool) (_oram : oram) (_soram : soram) (_c : cell
 
   + auto => /> *;do split;1,2,4,7..:smt().
     + move => _p _i Hi1 Hi2 Hp; case (_i = i{1}); last by smt().
-      move => H_i; rewrite H_i; case (_p = b{2}.`1); 1: by smt(find_rng_in).
+      move => H_i; rewrite H_i; case (_p = t{2}.`1); 1: by smt(find_rng_in).
       rewrite hasP negb_exists => Hpp be /=; smt(hasPn find_rng_in).
 
    + by smt(find_rng_in).
@@ -1164,7 +1164,7 @@ lemma equiv_fetch (_C : cell -> bool) (_oram : oram) (_soram : soram) (_c : cell
     move => Hee;elim Hee => kk [? H].
     rewrite (Hvv _ kk _) /=;1: smt().
     + rewrite hasP /=; rewrite hasP in H; smt().
-    + pose jj := find (fun (block : block) => block.`1 = _c)
+    + pose jj := find (fun (tuple : tuple) => tuple.`1 = _c)
                                     (_oram.`bucket (take kk (_oram.`positions _c))).
        move : (Hv (take kk (_oram.`positions _c)) _
                  (_oram.`bucket (take kk (_oram.`positions _c))).[jj] _ _);1..3:smt(find_rng_in hasP has_nthP mem_nth).
@@ -1179,21 +1179,21 @@ lemma equiv_fetch (_C : cell -> bool) (_oram : oram) (_soram : soram) (_c : cell
   by rewrite !flatten1  /#.
 qed.
 
-lemma equiv_putback (_C : cell -> bool) (_oram : oram) (_soram : soram) (_b : block) (_h : int) :
+lemma equiv_putback (_C : cell -> bool) (_oram : oram) (_soram : soram) (_t : tuple) (_h : int) :
     equiv[ORAM.putback ~ SimpleORAM.putback :
-         arg{1} = (_oram, _b)
-      /\ arg{2} = (_soram, _b)
-      /\ oram_rel _C _h _oram _soram /\ !_C _b.`1
+         arg{1} = (_oram, _t)
+      /\ arg{2} = (_soram, _t)
+      /\ oram_rel _C _h _oram _soram /\ !_C _t.`1
       /\  (forall p i, 0 <= i <= _oram.`height =>
                            size p = _oram.`height =>
                 let bs = _oram.`bucket (take i p) in
-                 !(has (fun (bb : block) => bb.`1 = _b.`1) bs))
-      /\ _oram.`positions _b.`1 = _b.`2
+                 !(has (fun (bb : tuple) => bb.`1 = _t.`1) bs))
+      /\ _oram.`positions _t.`1 = _t.`2
       /\ leakage_rel _h ORAM.leakage{1} SimpleORAM.leakage{2}
     ==>
          res{1}.`positions = _oram.`positions
-      /\ (forall cc, cc <> _b.`1 => res{2}.`smap cc = _soram.`smap cc)
-      /\ oram_rel (predU _C (pred1 _b.`1)) _h res{1} res{2}
+      /\ (forall cc, cc <> _t.`1 => res{2}.`smap cc = _soram.`smap cc)
+      /\ oram_rel (predU _C (pred1 _t.`1)) _h res{1} res{2}
       /\ leakage_rel _h ORAM.leakage{1} SimpleORAM.leakage{2}
   ].
   proof.
@@ -1201,17 +1201,17 @@ lemma equiv_putback (_C : cell -> bool) (_oram : oram) (_soram : soram) (_b : bl
   auto => /> 7? He ?Hf? ?? Hne *;split;1:smt().
   move => *;split; 1:smt().
   move => *;split.
-  + move => p Hp b'.
-    case (b'.`1 = _b.`1); last by smt(mem_cat).
-    move => H Hin; have ? : b' = _b; last by smt().
+  + move => p Hp t'.
+    case (t'.`1 = _t.`1); last by smt(mem_cat).
+    move => H Hin; have ? : t' = _t; last by smt().
     move : Hin; rewrite /"_.[_<-_]".
-    have ? : !b' \in _oram.`bucket p;last by smt(mem_cat).
+    have ? : !t' \in _oram.`bucket p;last by smt(mem_cat).
     move : (Hne (p ++ (nseq (_oram.`height - size p) false)) (size p) _);smt(List.size_ge0).
   move => *;split.
   + move => ?; split;1: smt().
   + move => *; split;1: smt(mem_cat).
   + move => *; split.
-    + move => _c ?; case (_c = _b.`1); last first.
+    + move => _c ?; case (_c = _t.`1); last first.
       + move => ne; move : (He _c _); 1: smt().
         move => Hec; elim Hec => i Hi; exists i => */=.
         rewrite hasP in Hi; rewrite hasP; smt(mem_cat).
@@ -1234,11 +1234,13 @@ lemma equiv_putback (_C : cell -> bool) (_oram : oram) (_soram : soram) (_b : bl
          case (i2 = size (_oram.`bucket []));2:smt().
          + move => ?????; rewrite ifF 1:/# ifF 1:/# ifT 1:/#.
            move : (Hne (p1 ++ (nseq (_oram.`height - size p1) false)) (size p1) _ _); smt(List.size_ge0 size_cat size_nseq  mem_nth).
-  + move => ? p ? i ?? b;rewrite /"_.[_<-_]" /=.
+  + move => ? p ? i ?? t;rewrite /"_.[_<-_]" /=.
     case (p = [] \/ i <= 0).
     + move => ?; rewrite ifT 1:/# /= mem_cat /= => H; elim H.
-      + move => *; move : (Hf p _ 0 _ b _);smt(take0).
-      + move => Hb; split;smt(List.size_ge0).
+      + move => *; move : (Hf p _ 0 _ t _);smt(take0).
+      + move => Hb; split.
+        + by smt(List.size_ge0).
+        + by smt(take0 size_eq0).
     + move => ?; rewrite ifF;  smt().
 by smt().
 qed.
@@ -1267,16 +1269,16 @@ lemma equiv_flush (_C : cell -> bool) (_oram : oram) (_soram : soram)  (_h : int
     /\ oram{1}.`positions = _oram.`positions
     /\ oram{2} = _soram
     (* Whatever is not in pushed is in the oram relation *)
-    /\ (oram_rel  (predI _C (fun cc => size pushed{1} <= find (fun (b : block) => b.`1 = cc) pushed{1})) _h oram{1} oram{2})
+    /\ (oram_rel  (predI _C (fun cc => size pushed{1} <= find (fun (t : tuple) => t.`1 = cc) pushed{1})) _h oram{1} oram{2})
     (* Whatever is in current oram first levels is not in pushed and it was somewhere above *)
     (*             in the original _oram *)
     /\ (forall _p, size _p < i{1} =>
-       (all (fun (block : block) =>
-           !block \in pushed{1} /\
-            (exists ii, 0<= ii <= size _p /\ block \in _oram.`bucket (take ii _p)))  (oram{1}.`bucket _p)))
+       (all (fun (tuple : tuple) =>
+           !tuple \in pushed{1} /\
+            (exists ii, 0<= ii <= size _p /\ tuple \in _oram.`bucket (take ii _p)))  (oram{1}.`bucket _p)))
     (* Whatever is in current oram later levels is untouched from _oram *)
     /\ (forall _p, i{1} <= size _p <= oram{1}.`height => oram{1}.`bucket _p = _oram.`bucket _p)
-    (* block is in pushed iff it was higher up in the path of _oram and agrees on the path *)
+    (* tuple is in pushed iff it was higher up in the path of _oram and agrees on the path *)
     /\ (forall bb, bb \in pushed{1} <=> (i{1} <= _h /\
            take i{1} bb.`2 = take i{1} p{1} /\ exists ii,  0<=ii<i{1} /\ bb \in _oram.`bucket (take ii p{1})))
     (* we have no repeats in pushed *)
@@ -1291,127 +1293,127 @@ lemma equiv_flush (_C : cell -> bool) (_oram : oram) (_soram : soram)  (_h : int
     pose newpushed := (if i{hr} = oram{hr}.`height then []
         else
           filter
-            (fun (block : block) =>
-               take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{m})
+            (fun (tuple : tuple) =>
+               take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{m})
             (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m}))) .
     pose stayhere := if i{hr} = oram{hr}.`height then
                  pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})
                else
                  filter
-                   (fun (block : block) =>
-                      take (i{hr} + 1) block.`2 <> take (i{hr} + 1) p{m})
+                   (fun (tuple : tuple) =>
+                      take (i{hr} + 1) tuple.`2 <> take (i{hr} + 1) p{m})
                    (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})).
     (* setting the ground *)
-    have ? : forall b, (!b \in newpushed /\ !b \in stayhere) => !b \in pushed{hr}.
+    have ? : forall t, (!t \in newpushed /\ !t \in stayhere) => !t \in pushed{hr}.
     + case (i{hr} = oram{hr}.`height); 1: by smt(mem_cat).
-      by rewrite /newpushed /stayhere => ->b /=; rewrite !mem_filter !mem_cat /#.
+      by rewrite /newpushed /stayhere => ->t /=; rewrite !mem_filter !mem_cat /#.
 
-    have ? : forall b, b \in stayhere => !b \in pushed{hr} => b \in oram{hr}.`bucket (take i{hr} p{m}).
+    have ? : forall t, t \in stayhere => !t \in pushed{hr} => t \in oram{hr}.`bucket (take i{hr} p{m}).
     + rewrite /stayhere;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-       by move => b;rewrite !mem_filter !mem_cat /#.
+       by move => t;rewrite !mem_filter !mem_cat /#.
 
-    have ? : forall b, b \in newpushed => !b \in pushed{hr} => b \in oram{hr}.`bucket (take i{hr} p{m}).
+    have ? : forall t, t \in newpushed => !t \in pushed{hr} => t \in oram{hr}.`bucket (take i{hr} p{m}).
     + rewrite /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-       by move => b;rewrite !mem_filter !mem_cat /#.
+       by move => t;rewrite !mem_filter !mem_cat /#.
 
-    have ? : forall b, b \in stayhere => !b \in newpushed.
+    have ? : forall t, t \in stayhere => !t \in newpushed.
     + rewrite /stayhere /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-       by move => b;rewrite !mem_filter !mem_cat /#.
+       by move => t;rewrite !mem_filter !mem_cat /#.
 
-    have ? : forall b, !b \in stayhere => !b \in newpushed =>
-      !b \in oram{hr}.`bucket (take i{hr} p{m}).
+    have ? : forall t, !t \in stayhere => !t \in newpushed =>
+      !t \in oram{hr}.`bucket (take i{hr} p{m}).
     + rewrite /stayhere /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-       by move => b;rewrite !mem_filter !mem_cat /#.
+       by move => t;rewrite !mem_filter !mem_cat /#.
 
     have Hsep : forall bb pp, size pp <= oram{hr}.`height =>
          bb \in oram{hr}.`bucket.[take i{hr} p{m} <- stayhere] pp =>
-          size newpushed <= find (fun (b : block) => b.`1 = bb.`1) newpushed.
+          size newpushed <= find (fun (t : tuple) => t.`1 = bb.`1) newpushed.
     +  move => bb pp ??;
-       have [ _ Hin]  := find_rng_in newpushed (fun (b : block) => b.`1 = bb.`1).
+       have [ _ Hin]  := find_rng_in newpushed (fun (t : tuple) => t.`1 = bb.`1).
        rewrite implybE in Hin;elim Hin;1: by smt(find_ge0).
        rewrite hasP=> Hex;elim Hex => b2 /= *.
        case (b2 \in stayhere) => *; 1: by smt().
-       case (i{hr} < size pp) => *.  (* block is below *)
+       case (i{hr} < size pp) => *.  (* tuple is below *)
         + have ? : bb \in _oram.`bucket pp by smt(size_take).
-          pose i1 := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket pp).
-          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+          pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket pp).
+          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
               have := Hinjb (take i2' p{m}) pp i2f i1 _ _ _;2,4:smt(size_take nth_find mem_nth).
-              + have := (find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?
+              + have := (find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?
 hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _;rewrite ?
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _;rewrite ?
 hasP /=; smt().
           have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt(size_take).
-          pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
+          pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
           have := Hinjb (take i{hr} p{m}) pp i2f i1 _ _ _;2,4:smt().
-              + have :=  find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              have /= :=  nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+              + have :=  find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              have /= :=  nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
         case (size pp < i{hr}) => *.
-        (* block is above *)
+        (* tuple is above *)
         + have ? : pp <> take i{hr} p{m} by smt(size_take).
           move : (H1 pp _); 1: by smt().
           rewrite allP => /> Hbs; move : (Hbs bb _);1:smt().
           move =>  [#? Hex];elim Hex => i1' *.
           have ? : bb \in _oram.`bucket (take i1' pp) by smt().
-          pose i1f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i1' pp)).
+          pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i1' pp)).
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
               have := Hinjb (take i2' p{m}) (take i1' pp) i2f i1f _ _ _; 4:  by smt().
-              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;by rewrite ?hasP /=; smt().
+              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;by rewrite ?hasP /=; smt().
 
           have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt(size_take).
-          pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
+          pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
           have := Hinjb (take i{hr} p{m}) (take i1' pp) i2f i1f _ _ _;4:smt(size_take).
-          + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-          + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-          have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP;smt(nth_find).
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
+          + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+          + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+          have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP;smt(nth_find).
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
 
-        + (* block is at this level *)
+        + (* tuple is at this level *)
           case (pp = take i{hr} p{m}) => *; last first.
           + have Hinn : bb \in _oram.`bucket pp by smt().
-          pose i1 := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket pp).
-          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+          pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket pp).
+          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
               have := Hinjb (take i2' p{m}) pp i2f i1 _ _ _;2,4:smt(size_take).
-              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP;smt(nth_find).
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP;smt(nth_find).
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
 
             have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt(size_take).
-            pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
+            pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
             have := Hinjb (take i{hr} p{m}) pp i2f i1 _ _ _;2,4:smt(size_take).
-            + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-            have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+            + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+            have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
 
         + have ? : bb \in stayhere;1: by smt().
           case (bb \in pushed{hr}) => Hpps;last first.
           +  have ? : bb \in (_oram.`bucket pp) by smt().
-             pose i1 := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket pp).
-             have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+             pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket pp).
+             have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
              case (b2 \in pushed{hr}) => Hb2.
               + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-                pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+                pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
                 have := Hinjb (take i2' p{m}) pp i2f i1 _ _ _;2,4:smt().
-                + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-                have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+                + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+                have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
 
              have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt().
-             pose i2f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
+             pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
              have := Hinjb (take i{hr} p{m}) pp i2f i1 _ _ _;2,4:smt().
-             + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-             have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _; by rewrite ?hasP /=; smt().
+             + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+             have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _; by rewrite ?hasP /=; smt().
 
              case (b2 \in pushed{hr}) => Hb2.
               + pose i1f := find (pred1 bb) pushed{hr}.
@@ -1419,23 +1421,23 @@ hasP /=; smt().
                 move : (H4 i1f i2f); smt().
 
              move : (H3 bb);rewrite Hpps /= => [#?? Hex];elim Hex => i1' *.
-             pose i1f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i1' p{m})).
+             pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i1' p{m})).
              have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt().
-             pose i2f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
+             pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
              have := Hinjb (take i{hr} p{m}) (take i1' p{m}) i2f i1f _ _ _;3..:smt().
-             + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-             + have := find_rng_in (_oram.`bucket (take i1' p{m})) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+             + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+             + have := find_rng_in (_oram.`bucket (take i1' p{m})) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
 
        have Hinjf : forall bb1 bb2 pp1 pp2, bb1 \in _oram.`bucket pp1 => bb2 \in _oram.`bucket pp2 =>
                  bb1.`1 = bb2.`1 => pp1 <> pp2 => false.
          move => bb1 bb2 pp1 pp2 Hl1 Hl2 Hl3 Hl4.
-         pose i1f := find (fun (bf : block) => bf.`1 = bb1.`1) (_oram.`bucket pp1).
-         pose i2f := find (fun (bf : block) => bf.`1 = bb2.`1) (_oram.`bucket pp2).
+         pose i1f := find (fun (bf : tuple) => bf.`1 = bb1.`1) (_oram.`bucket pp1).
+         pose i2f := find (fun (bf : tuple) => bf.`1 = bb2.`1) (_oram.`bucket pp2).
          have := Hinjb pp1 pp2 i1f i2f _ _ _.
-              + have := find_rng_in (_oram.`bucket pp1) (fun (bf : block) => bf.`1 = bb1.`1); rewrite hasP; smt().
-              + have := find_rng_in (_oram.`bucket pp2) (fun (bf : block) => bf.`1 = bb2.`1); rewrite hasP; smt().
-                have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb1.`1)(_oram.`bucket pp1)_;1: by rewrite ?hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb2.`1) (_oram.`bucket pp2)  _; by rewrite ?hasP /=; smt().
+              + have := find_rng_in (_oram.`bucket pp1) (fun (bf : tuple) => bf.`1 = bb1.`1); rewrite hasP; smt().
+              + have := find_rng_in (_oram.`bucket pp2) (fun (bf : tuple) => bf.`1 = bb2.`1); rewrite hasP; smt().
+                have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb1.`1)(_oram.`bucket pp1)_;1: by rewrite ?hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb2.`1) (_oram.`bucket pp2)  _; by rewrite ?hasP /=; smt().
                by smt(size_take).
 
 
@@ -1444,9 +1446,9 @@ hasP /=; smt().
     + move=>*; split;1: smt().
       move=>*; split.
       + move => pp ? bb Hb Hc Hnf.
-        case (i{hr} < size pp); 1: by smt(size_take). (* block is below *)
-        case (size pp < i{hr}) => *;1: by smt(allP). (* block is above *)
-        by smt(). (* block is at this level *)
+        case (i{hr} < size pp); 1: by smt(size_take). (* tuple is below *)
+        case (size pp < i{hr}) => *;1: by smt(allP). (* tuple is above *)
+        by smt(). (* tuple is at this level *)
       move=>*; split;1: smt(size_take).
       move=>*; split.
       + move => pp ? bb Hbb; split;1: by
@@ -1457,35 +1459,35 @@ hasP /=; smt().
 
       move=>*; split.
       + move => c Hc Hnh.
-        case (size stayhere <= find (fun (b : block) => b.`1 = c) stayhere) => Hcs; last first.
+        case (size stayhere <= find (fun (t : tuple) => t.`1 = c) stayhere) => Hcs; last first.
         + (* storing it now: it's in stayhere *)
           exists i{hr}; split => *;1:smt().
-          have  := find_rng_in stayhere (fun (b : block) => b.`1 = c).
-          have -> /= : 0 <= find (fun (b : block) => b.`1 = c) stayhere < size stayhere
+          have  := find_rng_in stayhere (fun (t : tuple) => t.`1 = c).
+          have -> /= : 0 <= find (fun (t : tuple) => t.`1 = c) stayhere < size stayhere
                by smt(List.size_ge0 find_ge0).
           rewrite hasP => Hex; elim Hex => bb *.
           rewrite hasP; exists bb.
           case (bb \in pushed{hr}) => Hip;last by move : (Hps p{m} _ i{hr} _);smt().
-          by smt(block_props).
+          by smt(tuple_props).
          + (* already in tree *)
            move : (H0 c _).
            + rewrite /predI /=;split;1:smt().
-              have  := find_rng_out stayhere (fun (b : block) => b.`1 = c).
-              have  := find_rng_out newpushed (fun (b : block) => b.`1 = c).
-              have  := find_rng_out pushed{hr} (fun (b : block) => b.`1 = c).
+              have  := find_rng_out stayhere (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out newpushed (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out pushed{hr} (fun (t : tuple) => t.`1 = c).
               rewrite !hasP !negb_exists /=; smt().
            move => H0c; elim H0c => i' [#?? Hb]; exists i';do split;1,2:smt().
            rewrite hasP in Hb; elim Hb => bb /= *.
            rewrite hasP; exists bb => /=.
-           case (i' < i{hr}) => *; 1: by smt(size_take). (* block is below *)
+           case (i' < i{hr}) => *; 1: by smt(size_take). (* tuple is below *)
            case (i{hr} = i') => *; last by smt(size_take).
            + have ? : take i{hr} p{m} <> (take i' (oram{hr}.`positions c)); last by smt().
-             have  := find_rng_out stayhere (fun (b : block) => b.`1 = c).
-             have  := find_rng_out newpushed (fun (b : block) => b.`1 = c).
-             have  := find_rng_out (oram{hr}.`bucket (take (i{hr}) p{m})) (fun (b : block) => b.`1 = c).
+             have  := find_rng_out stayhere (fun (t : tuple) => t.`1 = c).
+             have  := find_rng_out newpushed (fun (t : tuple) => t.`1 = c).
+             have  := find_rng_out (oram{hr}.`bucket (take (i{hr}) p{m})) (fun (t : tuple) => t.`1 = c).
              rewrite !hasP !negb_exists /=.
-             have -> /= : ! find (fun (b : block) => b.`1 = c) newpushed < size newpushed by smt().
-             have -> /= : ! find (fun (b : block) => b.`1 = c) stayhere < size stayhere by smt().
+             have -> /= : ! find (fun (t : tuple) => t.`1 = c) newpushed < size newpushed by smt().
+             have -> /= : ! find (fun (t : tuple) => t.`1 = c) stayhere < size stayhere by smt().
              move => Hib Hinp Hish; move : (Hinp bb); move : (Hish bb); rewrite  (: bb.`1 = c) 1:/# /=.
              by smt().
 
@@ -1511,8 +1513,8 @@ hasP /=; smt().
 
           + have /= HH := (filter_inj
                   (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m}))
-                  (fun (b : block) => b.`1)
-                  (fun (block : block) => take (i{hr} + 1) block.`2 <> take (i{hr} + 1) p{m})).
+                  (fun (t : tuple) => t.`1)
+                  (fun (tuple : tuple) => take (i{hr} + 1) tuple.`2 <> take (i{hr} + 1) p{m})).
             have ? : (forall (i1 i2 : int),
               0 <= i1 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
               0 <= i2 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
@@ -1636,7 +1638,7 @@ hasP /=; smt().
           +  have ? : (take ii p{m}) = (take ii pp); last by smt().
              apply (eq_from_nth witness);smt(size_take nth_take).
          have ? : bb \in _oram.`bucket (take i{hr} pp) by smt(take_size).
-            have := block_props _C _oram bb (take i{hr} pp) _; last by smt().
+            have := tuple_props _C _oram bb (take i{hr} pp) _; last by smt().
             + rewrite /is_oram.
               move => *; do split; 1:smt().
               move => *; do split; 1:smt().
@@ -1648,7 +1650,7 @@ hasP /=; smt().
               smt().
        (* it remains to prove not in newpushed *)
        have := Hsep bb pp _ _;1,2: smt().
-       have := find_rng_out newpushed (fun (b : block) => b.`1 = bb.`1) .
+       have := find_rng_out newpushed (fun (t : tuple) => t.`1 = bb.`1) .
        rewrite hasP => /=;smt().
 
       + move => bb; case (i{hr} = oram{hr}.`height) =>*;1: by smt().
@@ -1669,8 +1671,8 @@ hasP /=; smt().
       case (i{hr} = oram{hr}.`height) => ?; 1:smt().
       have /= HH := (filter_inj
          (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m}))
-         (fun (b : block) => b.`1)
-         (fun (block : block) => take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{m})).
+         (fun (t : tuple) => t.`1)
+         (fun (tuple : tuple) => take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{m})).
       have ? : (forall (i1 i2 : int),
        0 <= i1 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
        0 <= i2 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
@@ -1714,9 +1716,9 @@ hasP /=; smt().
   move => 8? Hor 4? Hhas 8? l1 l2; do split.
   + move => *; do split;1:smt(size_take).
     move => *; do split.
-    + move => p Hp b Hb Hc.
-      have : forall b, !b \in  pushedl by smt().
-      move : (Hor p _ b _ _);1,2,4:  smt(size_take).
+    + move => p Hp t Hb Hc.
+      have : forall t, !t \in  pushedl by smt().
+      move : (Hor p _ t _ _);1,2,4:  smt(size_take).
       rewrite /predI /=;split; 1:smt().
       move => *.
       rewrite lezNgt -has_find hasP /#.
@@ -1725,7 +1727,7 @@ hasP /=; smt().
     move => ?c Hc.
     move : (Hhas c _); last by smt(size_take).
       + rewrite /predI /=; split; 1:smt().
-      have := find_rng_out pushedl (fun (bb : block) => c = bb.`1).
+      have := find_rng_out pushedl (fun (bb : tuple) => c = bb.`1).
       rewrite hasPn; by smt(size_take).
 
   have := cat_take_drop (2*il) leakl;rewrite -l1 l2 /leakages_of_sleakages /= => <-.
@@ -1792,9 +1794,9 @@ match;1,2:smt().
           0 <= ii < i{1} /\ isWt _p.[ii] /\ varV _p.[ii] = c0) (predC1 _c1)) _h oram{1} oram{2} /\
   (forall p i, 0 <= i <= oram{1}.`height =>
                            size p = oram{1}.`height =>
-                let block = oram{1}.`bucket (take i p) in
-                 !(has (fun (block : block) => block.`1 = _c1) block)) /\
-  ={block} /\ block{2}.`1 = _c1 /\
+                let tuple = oram{1}.`bucket (take i p) in
+                 !(has (fun (tuple : tuple) => tuple.`1 = _c1) tuple)) /\
+  ={tuple} /\ tuple{2}.`1 = _c1 /\
   i{1} < size p{1} /\ i{2} < size p{2}
   );1: by ecall(equiv_fetch (fun c => exists ii, 0 <= ii < i{1} /\
                isWt _p.[ii] /\ varV _p.[ii] = c) oram{1} oram{2} c{1} _h);auto => /> /#.
@@ -1825,9 +1827,9 @@ match;1,2:smt().
           0 <= ii < i{1} /\ isWt _p.[ii] /\ varV _p.[ii] = c0) (predC1 _c1)) _h oram{1} oram{2} /\
   (forall p i, 0 <= i <= oram{1}.`height =>
                            size p = oram{1}.`height =>
-                let block = oram{1}.`bucket (take i p) in
-                 !(has (fun (block : block) => block.`1 = _c1) block)) /\
-  ={block} /\ block{2}.`1 = _c1 /\ ={pos} /\ size pos{1} = _h /\
+                let tuple = oram{1}.`bucket (take i p) in
+                 !(has (fun (tuple : tuple) => tuple.`1 = _c1) tuple)) /\
+  ={tuple} /\ tuple{2}.`1 = _c1 /\ ={pos} /\ size pos{1} = _h /\
   i{1} < size p{1} /\ i{2} < size p{2} /\
    oram{1}.`positions _c1 = pos{1}
   ).
@@ -1844,7 +1846,7 @@ match;1,2:smt().
         move => Hen; elim Hen => jj *.
         exists jj. smt(size_take).
       move => ??pp? ii??bb?; split; last by smt().
-      case (block{2}.`1 = bb.`1); last by move : (Hp pp _ ii _ bb _);smt().
+      case (tuple{2}.`1 = bb.`1); last by move : (Hp pp _ ii _ bb _);smt().
       move => ?; move : (Hne (pp++nseq (oram{1}.`height - size pp) false) ii _ _);1,2:smt(size_take).
       move => ?; move : (Hne (pp++nseq (oram{1}.`height - size pp) false) (size pp) _ _);1,2:smt(size_take).
       by smt(size_take).
@@ -1870,11 +1872,11 @@ match;1,2:smt().
   oram_rel
      (fun c0 => exists (ii : int),
           0 <= ii < i{1} + 1 /\ isWt _p.[ii] /\ varV _p.[ii] = c0) _h oram{1} oram{2} /\
-  ={block} /\ block{2}.`1 = _c1 /\ ={pos} /\ size pos{1} = _h /\
+  ={tuple} /\ tuple{2}.`1 = _c1 /\ ={pos} /\ size pos{1} = _h /\
   i{1} < size p{1} /\ i{2} < size p{2}).
   wp;ecall(equiv_putback (predI (fun cc => exists ii, 0 <= ii < i{1} + 1 /\
                isWt _p.[ii] /\ varV _p.[ii] = cc) (predC1 _c1)) oram{1} oram{2}
-     (block{1}.`1, oram{1}.`positions block{1}.`1, block{1}.`3)  _h).
+     (tuple{1}.`1, oram{1}.`positions tuple{1}.`1, tuple{1}.`3)  _h).
   + auto => /> &1 &2 35?; do split.
     + move => /> *; do! split; smt().
     + move => 14? rr1 rr2 5? Hpm Hpr 4? Hw ? Hp 2?; do split;1:smt().
@@ -1922,8 +1924,8 @@ move => _cv1 _cv2.
           0 <= ii < i{1} /\ isWt _p.[ii] /\ varV _p.[ii] = c0) (predC1 _cv1.`1)) _h oram{1} oram{2} /\
   (forall p i, 0 <= i <= oram{1}.`height =>
                            size p = oram{1}.`height =>
-                let block = oram{1}.`bucket (take i p) in
-                 !(has (fun (block : block) => block.`1 = _cv1.`1) block)) /\
+                let tuple = oram{1}.`bucket (take i p) in
+                 !(has (fun (tuple : tuple) => tuple.`1 = _cv1.`1) tuple)) /\
   i{1} < size p{1} /\ i{2} < size p{2}
   );1: by ecall(equiv_fetch (fun c => exists ii, 0 <= ii < i{1} /\
                isWt _p.[ii] /\ varV _p.[ii] = c) oram{1} oram{2} c{1} _h);auto => /> /#.
@@ -1956,8 +1958,8 @@ move => _cv1 _cv2.
           0 <= ii < i{1} /\ isWt _p.[ii] /\ varV _p.[ii] = c0) (predC1 _cv1.`1)) _h oram{1} oram{2} /\
   (forall p i, 0 <= i <= oram{1}.`height =>
                            size p = oram{1}.`height =>
-                let block = oram{1}.`bucket (take i p) in
-                 !(has (fun (block : block) => block.`1 = _cv1.`1) block)) /\
+                let tuple = oram{1}.`bucket (take i p) in
+                 !(has (fun (tuple : tuple) => tuple.`1 = _cv1.`1) tuple)) /\
   ={pos} /\ size pos{1} = _h /\
   i{1} < size p{1} /\ i{2} < size p{2} /\
    oram{1}.`positions _cv1.`1 = pos{1}
@@ -2025,6 +2027,7 @@ qed.
 
   op is_ioram (oram : ioram) =
        0 < oram.`iheight
+
     && (forall b, 0 <= oram.`counters b)
     && size oram.`bpath < oram.`iheight.
 
@@ -2089,10 +2092,10 @@ qed.
     /\ is_ioram ioram
     /\ (forall b,
           let pb = ioram.`bpath ++ [b] in
-          let bcks : block list list =
+          let bcks : tuple list list =
             map (fun p => oram.`bucket p) (prefixes ioram.`bpath) in
             count
-              (fun (b : block) => (isprefix pb b.`2))
+              (fun (t : tuple) => (isprefix pb t.`2))
               (flatten bcks)
             <= ioram.`counters b).
 
@@ -2103,10 +2106,10 @@ qed.
      /\ is_ioram ioram
      /\ (forall b,
            let pb = ioram.`bpath ++ [b] in
-           let bcks : block list list =
+           let bcks : tuple list list =
              map (fun p => oram.`bucket p) (prefixes ioram.`bpath) in
              count
-               (fun (b : block) => (isprefix pb b.`2))
+               (fun (t : tuple) => (isprefix pb t.`2))
                (flatten bcks)
              <= ioram.`counters b).
 
@@ -2129,10 +2132,10 @@ qed.
    lemma merged_filtered_bound (C : cell -> bool) (h : int) (oram : oram) (ioram : ioram) (k : int) :
         internal_rel C h oram ioram
      => (k <= let pb = ioram.`bpath in
-             let bcks : block list list =
+             let bcks : tuple list list =
                  map (fun p => oram.`bucket p) (prefixes ioram.`bpath) in
                    count
-                       (fun (b : block) => (isprefix pb b.`2))
+                       (fun (t : tuple) => (isprefix pb t.`2))
                        (flatten bcks))
      => k <= ioram.`counters false + ioram.`counters true.
    (* TODO: Manuel *)
@@ -2167,15 +2170,15 @@ qed.
        is_ioram ioram => 0 < ioram.`iheight.
    proof. by move => @/is_ioram. qed.
 
-   lemma is_oram_block_duplicate_freeness (C: cell -> bool) (oram : oram):
+   lemma is_oram_tuple_duplicate_freeness (C: cell -> bool) (oram : oram):
          is_oram C oram =>
-       (forall (p1 p2 : path) (block : block),
-           C block.`1
-        => block \in oram.`bucket p1
-        => block \in oram.`bucket p2
+       (forall (p1 p2 : path) (tuple : tuple),
+           C tuple.`1
+        => tuple \in oram.`bucket p1
+        => tuple \in oram.`bucket p2
         => p1 = p2).
    proof.
-   move => H_is_oram p1 p2 block ?.
+   move => H_is_oram p1 p2 tuple ?.
    by rewrite !(nthP witness) => /> * /#.
    qed.
 
@@ -2331,8 +2334,8 @@ qed.
      /\ internal_rel_fetch C h c0 oram{1} oram{2}
      /\ (forall _p _i, 0 <= _i < i{1} =>
                         size _p = oram{1}.`height =>
-            let block = oram{1}.`bucket (take _i _p) in
-              !(has (fun (block : block) => block.`1 = c0) block))
+            let tuple = oram{1}.`bucket (take _i _p) in
+              !(has (fun (tuple : tuple) => tuple.`1 = c0) tuple))
    ) (oram.`height  - i + 1){1}.
    - move => &m z; sp 3; wp 1 => /=; elim* => lkg; if; last first.
      - skip=> |> &hr 2? H_internal_rel *; do! split; 1,2,4: smt().
@@ -2360,7 +2363,7 @@ qed.
      + move => b *.
        rewrite /internal_rel_fetch in h3; elim h3 => /> 11? Hb.
        apply /(ler_trans (count
-            (fun (b0 : block) => isprefix (oram{m}.`bpath ++ [b]) b0.`2)
+            (fun (b0 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b0.`2)
             (flatten (map oram{hr}.`bucket (prefixes oram{m}.`bpath))))); last by exact Hb.
        case: (i{hr} <= size oram{m}.`bpath) => ?.
        + rewrite /prefixes -!map_comp /(\o).
@@ -2373,7 +2376,7 @@ qed.
                 oram{hr}.`bucket.[take i{hr} (oram{hr}.`positions c{hr}) <-
                     trim (oram{hr}.`bucket
                     (take i{hr} (oram{hr}.`positions c{hr})))
-                    (find (fun (x0 : block) => x0.`1 = c{hr}) (oram{hr}.`bucket
+                    (find (fun (x0 : tuple) => x0.`1 = c{hr}) (oram{hr}.`bucket
                         (take i{hr} (oram{hr}.`positions c{hr}))))]
                 (take x oram{m}.`bpath))
                 (range (i{hr} + 1) (size oram{m}.`bpath + 1)))
@@ -2389,7 +2392,7 @@ qed.
                 oram{hr}.`bucket.[take i{hr} (oram{hr}.`positions c{hr}) <-
                     trim (oram{hr}.`bucket
                     (take i{hr} (oram{hr}.`positions c{hr})))
-                    (find (fun (x0 : block) => x0.`1 = c{hr}) (oram{hr}.`bucket
+                    (find (fun (x0 : tuple) => x0.`1 = c{hr}) (oram{hr}.`bucket
                         (take i{hr} (oram{hr}.`positions c{hr}))))]
                 (take x oram{m}.`bpath)) (range 0 i{hr}))
           = (map (fun (x : int) => oram{hr}.`bucket (take x oram{m}.`bpath))
@@ -2408,7 +2411,7 @@ qed.
             (map
                 oram{hr}.`bucket.[take i{hr} (oram{hr}.`positions c{hr}) <-
                 trim (oram{hr}.`bucket (take i{hr} (oram{hr}.`positions c{hr})))
-                    (find (fun (x : block) => x.`1 = c{hr}) (oram{hr}.`bucket
+                    (find (fun (x : tuple) => x.`1 = c{hr}) (oram{hr}.`bucket
                     (take i{hr} (oram{hr}.`positions c{hr}))))]
                 (prefixes oram{m}.`bpath))
           = (map oram{hr}.`bucket (prefixes oram{m}.`bpath))
@@ -2479,11 +2482,11 @@ qed.
      /\ i{1} = oram{1}.`height + 1
      /\ internal_rel _C _h oram{1} oram{2}
      /\ ((isprefix oram{2}.`bpath p{2}) => (
-        (* count the blocks along bpath that will be flushed, which is 0 *)
+        (* count the tuples along bpath that will be flushed, which is 0 *)
             let b = p{2}.[size oram{2}.`bpath] in
             let pb = oram{2}.`bpath ++ [b] in
-            (let bcks : block list = flatten (map (fun p => oram{1}.`bucket p) (prefixes oram{2}.`bpath)) in
-                 count (fun (b : block) => (isprefix pb b.`2)) bcks = 0)))
+            (let bcks : tuple list = flatten (map (fun p => oram{1}.`bucket p) (prefixes oram{2}.`bpath)) in
+                 count (fun (t : tuple) => (isprefix pb t.`2)) bcks = 0)))
    ).
 
    while {1} (
@@ -2495,15 +2498,15 @@ qed.
      /\ oram{2} = _ioram
      /\ oram{1}.`height = oram{2}.`iheight
      /\ internal_rel _C _h _oram _ioram
-     /\ internal_rel (predI _C (fun cc => size pushed{1} <= find (fun (b : block) => b.`1 = cc) pushed{1})) _h oram{1} oram{2}
+     /\ internal_rel (predI _C (fun cc => size pushed{1} <= find (fun (t : tuple) => t.`1 = cc) pushed{1})) _h oram{1} oram{2}
      (* Whatever is in current oram first levels is not in pushed and it was somewhere above in the original _oram *)
      /\ (forall _p, size _p < i{1} =>
-          (all (fun (block : block) =>
-            !block \in pushed{1} /\
-             (exists ii, 0<= ii <= size _p /\ block \in _oram.`bucket (take ii _p))) (oram{1}.`bucket _p)))
+          (all (fun (tuple : tuple) =>
+            !tuple \in pushed{1} /\
+             (exists ii, 0<= ii <= size _p /\ tuple \in _oram.`bucket (take ii _p))) (oram{1}.`bucket _p)))
      (* Whatever is in current oram later levels is untouched from _oram *)
      /\ (forall _p, i{1} <= size _p <= oram{1}.`height => oram{1}.`bucket _p = _oram.`bucket _p)
-     (* block is in pushed iff it was higher up in the path of _oram, agress on the flushing path p, and it's not in the higher path of the current oram *)
+     (* tuple is in pushed iff it was higher up in the path of _oram, agress on the flushing path p, and it's not in the higher path of the current oram *)
      /\ (forall bb, bb \in pushed{1} <=>
              (i{1} <= _oram.`height
            /\ take i{1} bb.`2 = take i{1} p{1}
@@ -2515,24 +2518,24 @@ qed.
            => 0 <= i2 < size pushed{1}
            => pushed{1}.[i1].`1 = pushed{1}.[i2].`1
            => i1 = i2)
-     (* count the blocks accessed that possibly go into the other subtree, which is bounded by a counter *)
+     (* count the tuples accessed that possibly go into the other subtree, which is bounded by a counter *)
      /\ (forall (b : bool),
             let pb = oram{2}.`bpath ++ [b] in
-            let bcks : block list = flatten (map (fun path => oram{1}.`bucket path) (prefixes oram{2}.`bpath)) in
+            let bcks : tuple list = flatten (map (fun path => oram{1}.`bucket path) (prefixes oram{2}.`bpath)) in
                 count
-                   (fun (b : block) => (isprefix pb b.`2))
+                   (fun (t : tuple) => (isprefix pb t.`2))
                    (bcks ++ (if i{1} <= size oram{2}.`bpath then pushed{1} else []))
                 <= oram{2}.`counters b)
-     (* count the blocks accessed that will be flushed, which is 0 *)
+     (* count the tuples accessed that will be flushed, which is 0 *)
      /\ ((isprefix oram{2}.`bpath p{1}) =>
            (let b = p{2}.[size oram{2}.`bpath] in
             let pb = oram{2}.`bpath ++ [b] in
-            let bcks : block list =
+            let bcks : tuple list =
               flatten
                 (map
                   oram{1}.`bucket
                   (if (0 < i{1}) then (prefixes (take (i{1} - 1) oram{2}.`bpath)) else [])) in
-              count (fun (b : block) => (isprefix pb b.`2)) bcks = 0))
+              count (fun (t : tuple) => (isprefix pb t.`2)) bcks = 0))
    ) (oram.`height - i + 1){1}.
    + auto => /= |> &hr ?????? Hrel1 Hrel2 H1 H2 H3 H4 H_loop_inv1 H_loop_inv2 *.
      rewrite /internal_rel in Hrel1; elim Hrel1 => |> ? H_is_oram1 H_is_ioram1 counter_ineq_original.
@@ -2543,36 +2546,36 @@ qed.
      pose newpushed := (if i{hr} = oram{hr}.`height then []
          else
            filter
-             (fun (block : block) =>
-                take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{m})
+             (fun (tuple : tuple) =>
+                take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{m})
              (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m}))).
      pose stayhere := if i{hr} = oram{hr}.`height then
                   pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})
                 else
                   filter
-                    (fun (block : block) =>
-                       take (i{hr} + 1) block.`2 <> take (i{hr} + 1) p{m})
+                    (fun (tuple : tuple) =>
+                       take (i{hr} + 1) tuple.`2 <> take (i{hr} + 1) p{m})
                     (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})).
      (* setting the ground *)
-     have ? : forall b, (!b \in newpushed /\ !b \in stayhere) => !b \in pushed{hr}.
+     have ? : forall t, (!t \in newpushed /\ !t \in stayhere) => !t \in pushed{hr}.
      + case (i{hr} = oram{hr}.`height); 1: by smt(mem_cat).
-       by rewrite /newpushed /stayhere => ->b /=; rewrite !mem_filter !mem_cat /#.
+       by rewrite /newpushed /stayhere => ->t /=; rewrite !mem_filter !mem_cat /#.
 
-     have ? : forall b, b \in stayhere => !b \in pushed{hr} => b \in oram{hr}.`bucket (take i{hr} p{m}).
+     have ? : forall t, t \in stayhere => !t \in pushed{hr} => t \in oram{hr}.`bucket (take i{hr} p{m}).
      + rewrite /stayhere;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
-     have H_newpushed_not_pushed : forall b, b \in newpushed => !b \in pushed{hr} => b \in oram{hr}.`bucket (take i{hr} p{m}).
+     have H_newpushed_not_pushed : forall t, t \in newpushed => !t \in pushed{hr} => t \in oram{hr}.`bucket (take i{hr} p{m}).
      + rewrite /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
-     have ? : forall b, b \in stayhere => !b \in newpushed.
+     have ? : forall t, t \in stayhere => !t \in newpushed.
      + rewrite /stayhere /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
-     have ? : forall b, !b \in stayhere => !b \in newpushed => !b \in oram{hr}.`bucket (take i{hr} p{m}).
+     have ? : forall t, !t \in stayhere => !t \in newpushed => !t \in oram{hr}.`bucket (take i{hr} p{m}).
      + rewrite /stayhere /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
      have ?: forall bb1 bb2, bb1 \in stayhere => bb2 \in newpushed => bb1.`2 <> bb2.`2.
      + rewrite /stayhere /newpushed => bb1 bb2.
@@ -2581,102 +2584,102 @@ qed.
 
      have Hsep : forall bb pp, size pp <= oram{hr}.`height =>
           bb \in oram{hr}.`bucket.[take i{hr} p{m} <- stayhere] pp =>
-           size newpushed <= find (fun (b : block) => b.`1 = bb.`1) newpushed.
+           size newpushed <= find (fun (t : tuple) => t.`1 = bb.`1) newpushed.
      + move => bb pp ??.
-       have [ _ Hin]  := find_rng_in newpushed (fun (b : block) => b.`1 = bb.`1).
+       have [ _ Hin]  := find_rng_in newpushed (fun (t : tuple) => t.`1 = bb.`1).
        rewrite implybE in Hin;elim Hin;1: by smt(find_ge0).
        rewrite hasP=> Hex;elim Hex => b2 /= *.
        case (b2 \in stayhere) => *; 1: by smt().
-       case (i{hr} < size pp) => *.  (* block is below *)
+       case (i{hr} < size pp) => *.  (* tuple is below *)
         + have ? : bb \in _oram.`bucket pp by smt(size_take).
-          pose i1 := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket pp).
-          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+          pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket pp).
+          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
               have := Hinjb (take i2' p{m}) pp i2f i1 _ _ _;2,4:smt(size_take nth_find mem_nth).
-              + have := (find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?
+              + have := (find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?
 hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _;rewrite ?
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _;rewrite ?
 hasP /=; smt().
           have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt(size_take).
-          pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
+          pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
           have := Hinjb (take i{hr} p{m}) pp i2f i1 _ _ _.
-          + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+          + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
           + smt().
-          + have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite hasP /=; smt().
-            have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+          + have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite hasP /=; smt().
+            have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
           smt(size_take).
 
         case (size pp < i{hr}) => *.
-        (* block is above *)
+        (* tuple is above *)
         + have ? : pp <> take i{hr} p{m} by smt(size_take).
           move : (H1 pp _); 1: by smt().
           rewrite allP => /> Hbs; move : (Hbs bb _);1:smt().
           move =>  [#? Hex];elim Hex => i1' *.
           have ? : bb \in _oram.`bucket (take i1' pp) by smt().
-          pose i1f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i1' pp)).
+          pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i1' pp)).
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
               have := Hinjb (take i2' p{m}) (take i1' pp) i2f i1f _ _ _; 4:  by smt().
-              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-              + have /= ? := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _; 1: by rewrite ?hasP /#.
+              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+              + have /= ? := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _; 1: by rewrite ?hasP /#.
                 rewrite /"_.[_]" &(eq_trans _ bb.`1).
                 + smt().
                 + rewrite /i1f &(eq_sym_imp).
-                  apply (nth_find witness (fun (b0 : block) => b0.`1 = bb.`1) (_oram.`bucket (take i1' pp))).
+                  apply (nth_find witness (fun (b0 : tuple) => b0.`1 = bb.`1) (_oram.`bucket (take i1' pp))).
                   apply List.hasP.
                   by exists bb => //=.
 
             + have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt(size_take).
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
               have := Hinjb (take i{hr} p{m}) (take i1' pp) i2f i1f _ _ _;4:smt(size_take).
-              + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1); 1: by rewrite hasP /#.
-              + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-              + have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP;smt(nth_find).
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
+              + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1); 1: by rewrite hasP /#.
+              + have := find_rng_in (_oram.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+              + have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP;smt(nth_find).
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
 
-        + (* block is at this level *)
+        + (* tuple is at this level *)
           case (pp = take i{hr} p{m}) => *; last first.
           + have Hinn : bb \in _oram.`bucket pp by smt().
-          pose i1 := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket pp).
-          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+          pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket pp).
+          have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
               have := Hinjb (take i2' p{m}) pp i2f i1 _ _ _;2,4:smt(size_take).
-              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP;smt(nth_find).
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+              + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP;smt(nth_find).
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
 
             have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt(size_take).
-            pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
+            pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})).
             have := Hinjb (take i{hr} p{m}) pp i2f i1 _ _ _;2,4:smt(size_take).
-            + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-            + have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP /=; smt().
-            have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+            + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+            + have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _;1: by rewrite ?hasP /=; smt().
+            have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
 
         + have ? : bb \in stayhere;1: by smt().
           case (bb \in pushed{hr}) => Hpps;last first.
           +  have ? : bb \in (_oram.`bucket pp) by smt().
-             pose i1 := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket pp).
-             have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+             pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket pp).
+             have i1b := find_rng_in (_oram.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
              case (b2 \in pushed{hr}) => Hb2.
               + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-                pose i2f := find (fun (b : block) => b.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
+                pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (_oram.`bucket (take i2' p{m})).
                 have := Hinjb (take i2' p{m}) pp i2f i1 _ _ _;2,4:smt().
-                + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-                have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
+                + have := find_rng_in (_oram.`bucket (take i2' p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+                have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i2' p{m})) _;1: by rewrite ?hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (_oram.`bucket pp) _; by rewrite ?hasP /=; smt().
 
              have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt().
-             pose i2f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
+             pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
              have := Hinjb (take i{hr} p{m}) pp i2f i1 _ _ _; 2, 4: smt().
-             + by have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-             + by have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _; by rewrite ?hasP /=; smt().
+             + by have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+             + by have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (_oram.`bucket (take i{hr} p{m})) _; by rewrite ?hasP /=; smt().
 
              case (b2 \in pushed{hr}) => Hb2.
               + pose i1f := find (pred1 bb) pushed{hr}.
@@ -2684,35 +2687,35 @@ hasP /=; smt().
                 move : (H4 i1f i2f) ; smt().
 
              move : (H3 bb);rewrite Hpps /= => [#?? Hex];elim Hex => i1' *.
-             pose i1f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i1' p{m})).
+             pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i1' p{m})).
              have ? : b2 \in _oram.`bucket (take i{hr} p{m}) by smt().
-             pose i2f := find (fun (b : block) => b.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
+             pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (_oram.`bucket (take i{hr} p{m})).
              have := Hinjb (take i{hr} p{m}) (take i1' p{m}) i2f i1f _ _ _;3..:smt().
-             + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-             + have := find_rng_in (_oram.`bucket (take i1' p{m})) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+             + have := find_rng_in (_oram.`bucket (take i{hr} p{m})) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+             + have := find_rng_in (_oram.`bucket (take i1' p{m})) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
 
        have Hinjf : forall bb1 bb2 pp1 pp2, bb1 \in _oram.`bucket pp1 => bb2 \in _oram.`bucket pp2 =>
                  bb1.`1 = bb2.`1 => pp1 <> pp2 => false.
          move => bb1 bb2 pp1 pp2 Hl1 Hl2 Hl3 Hl4.
-         pose i1f := find (fun (bf : block) => bf.`1 = bb1.`1) (_oram.`bucket pp1).
-         pose i2f := find (fun (bf : block) => bf.`1 = bb2.`1) (_oram.`bucket pp2).
+         pose i1f := find (fun (bf : tuple) => bf.`1 = bb1.`1) (_oram.`bucket pp1).
+         pose i2f := find (fun (bf : tuple) => bf.`1 = bb2.`1) (_oram.`bucket pp2).
          have := Hinjb pp1 pp2 i1f i2f _ _ _.
-              + have := find_rng_in (_oram.`bucket pp1) (fun (bf : block) => bf.`1 = bb1.`1); rewrite hasP; smt().
-              + have := find_rng_in (_oram.`bucket pp2) (fun (bf : block) => bf.`1 = bb2.`1); rewrite hasP; smt().
-                have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb1.`1)(_oram.`bucket pp1)_;1: by rewrite ?hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb2.`1) (_oram.`bucket pp2)  _; by rewrite ?hasP /=; smt().
+              + have := find_rng_in (_oram.`bucket pp1) (fun (bf : tuple) => bf.`1 = bb1.`1); rewrite hasP; smt().
+              + have := find_rng_in (_oram.`bucket pp2) (fun (bf : tuple) => bf.`1 = bb2.`1); rewrite hasP; smt().
+                have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb1.`1)(_oram.`bucket pp1)_;1: by rewrite ?hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb2.`1) (_oram.`bucket pp2)  _; by rewrite ?hasP /=; smt().
               by smt(size_take).
 
      (* pushed{hr} + bucket (take i{hr} p{m}) = stayhere + newpushed *)
-     have ?: forall b, (b \in pushed{hr} \/ b \in (oram{hr}.`bucket (take i{hr} p{m}))) <=> (b \in stayhere \/ b \in newpushed).
+     have ?: forall t, (t \in pushed{hr} \/ t \in (oram{hr}.`bucket (take i{hr} p{m}))) <=> (t \in stayhere \/ t \in newpushed).
      + smt().
 
      (* pushed{hr} /\ bucket (take i{hr} p{m}) = \emptyset *)
-     (* have ?: forall b, (b \in pushed{hr}) => !b \in (oram{hr}.`bucket (take i{hr} p{m})). *)
+     (* have ?: forall t, (t \in pushed{hr}) => !t \in (oram{hr}.`bucket (take i{hr} p{m})). *)
      (* + smt(). *)
 
      (* stayhere /\ newpushed = \emptyset *)
-     have ?: forall b, (b \in stayhere) => !(b \in newpushed).
+     have ?: forall t, (t \in stayhere) => !(t \in newpushed).
      + smt().
 
      have ?: perm_eq (pushed{hr} ++ (oram{hr}.`bucket (take i{hr} p{m}))) (stayhere ++ newpushed).
@@ -2720,11 +2723,11 @@ hasP /=; smt().
        case: (i{hr} = oram{hr}.`height) => ?.
        + rewrite cats0 perm_eq_refl //=.
        + rewrite (_:
-            (fun (block : block) =>
-                take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{m})
+            (fun (tuple : tuple) =>
+                take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{m})
           = predC
-                (fun (block : block) =>
-                    take (i{hr} + 1) block.`2 <> take (i{hr} + 1) p{m})).
+                (fun (tuple : tuple) =>
+                    take (i{hr} + 1) tuple.`2 <> take (i{hr} + 1) p{m})).
          + rewrite /predC //=.
          rewrite perm_eq_sym perm_filterC.
 
@@ -2778,7 +2781,7 @@ hasP /=; smt().
      have H_new_loop_inv1:
         forall (b0 : bool),
         count
-            (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b0]) b1.`2)
+            (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b0]) b1.`2)
             (flatten
                 (map oram{hr}.`bucket.[take i{hr} p{m} <- stayhere]
                     (prefixes oram{m}.`bpath))
@@ -2787,8 +2790,8 @@ hasP /=; smt().
      + move => b @/"_.[_<-_]" />.
        case (isprefix oram{m}.`bpath p{m}) => Hpre.
        + case (i{hr} < size oram{m}.`bpath) => ?.
-         (* the nodes up to i have equivalent or less blocks, while other nodes remain the same. *)
-         (* We will specifically seperate the current node: stayhere, and prove that it's no more than the blocks in pushed and node i before *)
+         (* the nodes up to i have equivalent or less tuples, while other nodes remain the same. *)
+         (* We will specifically seperate the current node: stayhere, and prove that it's no more than the tuples in pushed and node i before *)
          have Hi: (i{hr} <= size oram{m}.`bpath) by smt().
          have->: (i{hr} + 1 <= size oram{m}.`bpath) by smt().
          move: H_loop_inv1 => H_loop_inv1.
@@ -2800,7 +2803,7 @@ hasP /=; smt().
          have Hheight: !i{hr} = oram{hr}.`height by smt().
          apply (ler_trans
            (count
-             (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
+             (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
              (flatten (map oram{hr}.`bucket (prefixes oram{m}.`bpath)) ++
                pushed{hr}))); last by exact H_loop_inv1.
          rewrite /prefixes -!map_comp /(\o).
@@ -2811,16 +2814,16 @@ hasP /=; smt().
          rewrite !Htake //= H_map_small H_map_large.
          have ?:
             count
-                (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
+                (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
                 stayhere
           + count
-                (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
+                (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
                 newpushed
           = count
-                (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
+                (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
                 (oram{hr}.`bucket (take i{hr} p{m}))
           + count
-                (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
+                (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
                 pushed{hr}.
          + by rewrite -!count_cat &(perm_eqP) perm_eq_sym perm_catCl //=.
          by smt().
@@ -2834,7 +2837,7 @@ hasP /=; smt().
            move => H_loop_inv1.
            apply (ler_trans
                (count
-                 (fun (b1 : block) =>
+                 (fun (b1 : tuple) =>
                     isprefix (oram{m}.`bpath ++ [b]) b1.`2)
                  (flatten (map oram{hr}.`bucket (prefixes oram{m}.`bpath)) ++
                   pushed{hr}))
@@ -2848,7 +2851,7 @@ hasP /=; smt().
              rewrite H_map_small -addzA lez_add2l -count_cat.
              apply (ler_trans (
                 count
-                    (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
+                    (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
                     (stayhere ++ newpushed)
              )).
              + by smt(count_cat count_ge0).
@@ -2880,10 +2883,10 @@ hasP /=; smt().
                by smt().
              by exact H_loop_inv1.
 
-       (* The number of blocks along bpath is not increasing. *)
+       (* The number of tuples along bpath is not increasing. *)
        (* We will split the case according whether i falls in the common prefix of bpath and p. *)
        + apply (ler_trans (count
-                    (fun (b0 : block) =>
+                    (fun (b0 : tuple) =>
                         isprefix (oram{m}.`bpath ++ [b]) b0.`2)
                     (flatten (map oram{hr}.`bucket (prefixes oram{m}.`bpath)) ++
                     if i{hr} <= size oram{m}.`bpath then pushed{hr} else []))); last by exact H_loop_inv1.
@@ -2949,7 +2952,7 @@ hasP /=; smt().
            apply ler_eqVlt; left.
            have ?:
              count
-                (fun (b1 : block) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
+                (fun (b1 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b1.`2)
                 (if i{hr} + 1 <= size oram{m}.`bpath then newpushed else []) = 0.
            + case: (i{hr} + 1 <= size oram{m}.`bpath) => ?.
              + rewrite /newpushed.
@@ -2966,7 +2969,7 @@ hasP /=; smt().
              + by done.
            have ?:
              count
-                (fun (b0 : block) => isprefix (oram{m}.`bpath ++ [b]) b0.`2)
+                (fun (b0 : tuple) => isprefix (oram{m}.`bpath ++ [b]) b0.`2)
                 (if i{hr} <= size oram{m}.`bpath then pushed{hr} else []) = 0.
            + case: (i{hr} <= size oram{m}.`bpath) => ?.
              + apply count_eq0.
@@ -2995,11 +2998,11 @@ hasP /=; smt().
 
        move=> /> *; split.
        + move => c Hc Hnh.
-         case (size stayhere <= find (fun (b : block) => b.`1 = c) stayhere) => Hcs; last first.
+         case (size stayhere <= find (fun (t : tuple) => t.`1 = c) stayhere) => Hcs; last first.
          + (* storing it now: it's in stayhere *)
            exists i{hr}; split => *;1:smt().
-           have  := find_rng_in stayhere (fun (b : block) => b.`1 = c). (* Question. *)
-           have -> /= : 0 <= find (fun (b : block) => b.`1 = c) stayhere < size stayhere
+           have  := find_rng_in stayhere (fun (t : tuple) => t.`1 = c). (* Question. *)
+           have -> /= : 0 <= find (fun (t : tuple) => t.`1 = c) stayhere < size stayhere
                 by smt(List.size_ge0 find_ge0).
            rewrite hasP => Hex; elim Hex => bb *.
            rewrite hasP; exists bb.
@@ -3007,23 +3010,23 @@ hasP /=; smt().
           + (* already in tree *)
             move : (H0 c _).
             + rewrite /predI /=;split;1:smt().
-              have  := find_rng_out stayhere (fun (b : block) => b.`1 = c).
-              have  := find_rng_out newpushed (fun (b : block) => b.`1 = c).
-              have  := find_rng_out pushed{hr} (fun (b : block) => b.`1 = c).
+              have  := find_rng_out stayhere (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out newpushed (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out pushed{hr} (fun (t : tuple) => t.`1 = c).
               rewrite !hasP !negb_exists //=.
               smt().
             move => H0c; elim H0c => i' [#?? Hb]; exists i';do split;1,2:smt().
             rewrite hasP in Hb; elim Hb => bb /= *.
             rewrite hasP; exists bb => /=.
-            case (i' < i{hr}) => *; 1: by smt(size_take). (* block is below *)
+            case (i' < i{hr}) => *; 1: by smt(size_take). (* tuple is below *)
             case (i{hr} = i') => *; last by smt(size_take).
             + have ? : take i{hr} p{m} <> (take i' (oram{hr}.`positions c)); last by smt().
-              have  := find_rng_out stayhere (fun (b : block) => b.`1 = c).
-              have  := find_rng_out newpushed (fun (b : block) => b.`1 = c).
-              have  := find_rng_out (oram{hr}.`bucket (take (i{hr}) p{m})) (fun (b : block) => b.`1 = c).
+              have  := find_rng_out stayhere (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out newpushed (fun (t : tuple) => t.`1 = c).
+              have  := find_rng_out (oram{hr}.`bucket (take (i{hr}) p{m})) (fun (t : tuple) => t.`1 = c).
               rewrite !hasP !negb_exists /=.
-              have -> /= : ! find (fun (b : block) => b.`1 = c) newpushed < size newpushed by smt().
-              have -> /= : ! find (fun (b : block) => b.`1 = c) stayhere < size stayhere by smt().
+              have -> /= : ! find (fun (t : tuple) => t.`1 = c) newpushed < size newpushed by smt().
+              have -> /= : ! find (fun (t : tuple) => t.`1 = c) stayhere < size stayhere by smt().
               move => Hib Hinp Hish; move : (Hinp bb); move : (Hish bb); rewrite  (: bb.`1 = c) 1:/# /=.
               by smt().
 
@@ -3049,8 +3052,8 @@ hasP /=; smt().
 
            + have /= HH := (filter_inj
                    (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m}))
-                   (fun (b : block) => b.`1)
-                   (fun (block : block) => take (i{hr} + 1) block.`2 <> take (i{hr} + 1) p{m})).
+                   (fun (t : tuple) => t.`1)
+                   (fun (tuple : tuple) => take (i{hr} + 1) tuple.`2 <> take (i{hr} + 1) p{m})).
              have ? : (forall (i1 i2 : int),
                0 <= i1 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
                0 <= i2 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
@@ -3156,7 +3159,7 @@ hasP /=; smt().
      + move => b />.
        apply (ler_trans (
          count
-            (fun (b0 : block) =>
+            (fun (b0 : tuple) =>
                 isprefix (oram{m}.`bpath ++ [b]) b0.`2)
             (flatten
                 (map oram{hr}.`bucket.[take i{hr} p{m} <- stayhere]
@@ -3188,7 +3191,7 @@ hasP /=; smt().
          +  have ? : (take ii p{m}) = (take ii pp); last by smt().
             apply (eq_from_nth witness);smt(size_take nth_take).
         have ? : bb \in _oram.`bucket (take i{hr} pp) by smt(take_size).
-           have := block_props _C _oram bb (take i{hr} pp) _; last by smt().
+           have := tuple_props _C _oram bb (take i{hr} pp) _; last by smt().
            + rewrite /is_oram.
              move => *; do split; 1:smt().
              move => *; do split. assumption.
@@ -3200,7 +3203,7 @@ hasP /=; smt().
              smt().
        (* it remains to prove not in newpushed *)
        have := Hsep bb pp _ _;1,2: smt().
-       have := find_rng_out newpushed (fun (b : block) => b.`1 = bb.`1) .
+       have := find_rng_out newpushed (fun (t : tuple) => t.`1 = bb.`1) .
        rewrite hasP => /=;smt().
 
      + by smt(size_take).
@@ -3223,8 +3226,8 @@ hasP /=; smt().
        case (i{hr} = oram{hr}.`height) => ?; 1:smt().
        have /= HH := (filter_inj
           (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m}))
-          (fun (b : block) => b.`1)
-          (fun (block : block) => take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{m})).
+          (fun (t : tuple) => t.`1)
+          (fun (tuple : tuple) => take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{m})).
        have ? : (forall (i1 i2 : int),
         0 <= i1 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
         0 <= i2 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{m})) =>
@@ -3279,7 +3282,7 @@ hasP /=; smt().
            + by smt(range_geq).
          have->:
            count
-                (fun (b0 : block) =>
+                (fun (b0 : tuple) =>
                     isprefix (oram{m}.`bpath ++ [p{m}.[size oram{m}.`bpath]]) b0.`2) stayhere = 0.
          + rewrite /stayhere.
            have-> //=: !i{hr} = oram{hr}.`height by smt().
@@ -3335,7 +3338,7 @@ hasP /=; smt().
        have Hpushed_L: pushed_L = [] by smt(mem_eq0).
        split; 1: by smt().
        split; 1: by smt().
-       have ?: (predI _C (fun (cc : cell) => size pushed_L <= find (fun (b0 : block) => b0.`1 = cc) pushed_L) = _C).
+       have ?: (predI _C (fun (cc : cell) => size pushed_L <= find (fun (b0 : tuple) => b0.`1 = cc) pushed_L) = _C).
        + rewrite /predI &(fun_ext) /(==) //= => x.
          rewrite Hpushed_L.
          by smt(size_eq0 find_size).
@@ -3366,21 +3369,21 @@ hasP /=; smt().
    + skip => //= |>.
    qed.
 
-   lemma internal_putback (_C : cell -> bool) (_h : int) (_oram : oram) (_ioram : ioram) (b : block):
+   lemma internal_putback (_C : cell -> bool) (_h : int) (_oram : oram) (_ioram : ioram) (t : tuple):
      equiv[
        ORAM.putback ~ InternalORAM.putback :
-          arg{1} = (_oram, b)
-       /\ arg{2} = (_ioram, b.`2)
-       /\ !_C b.`1
-       /\ _oram.`positions b.`1 = b.`2
+          arg{1} = (_oram, t)
+       /\ arg{2} = (_ioram, t.`2)
+       /\ !_C t.`1
+       /\ _oram.`positions t.`1 = t.`2
        /\ internal_rel _C _h _oram _ioram
        ==>
-          internal_rel (predU _C (pred1 b.`1)) _h res{1} res{2}
+          internal_rel (predU _C (pred1 t.`1)) _h res{1} res{2}
    ].
    proof.
    proc => /=.
    auto => @/internal_rel @/is_ioram |> => 7? Hcount; split => *.
-   (* the case that the path of the putback block is in the subtree of bpath *)
+   (* the case that the path of the putback tuple is in the subtree of bpath *)
    - split; [| split].
      - by smt(is_oram_is_oram_putback).
      - (* is_ioram *)
@@ -3388,15 +3391,15 @@ hasP /=; smt().
      - (* counter inequality *)
        move => b0 @/"_.[_<-_]" @/predT //=.
        apply (ler_trans
-         (count (fun (b1 : block) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
+         (count (fun (b1 : tuple) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
             (flatten
                 (map
                     _oram.`bucket
                     (prefixes _ioram.`bpath)))
-       + (count (fun (b1 : block) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
+       + (count (fun (b1 : tuple) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
             (flatten
                 (map
-                    (fun (path : path) => if path = [] then [b] else [])
+                    (fun (path : path) => if path = [] then [t] else [])
                     (prefixes _ioram.`bpath))))
        )).
        + rewrite !count_flatten -!map_comp !sumzE !BIA.big_mapT /(\o) //=.
@@ -3406,16 +3409,16 @@ hasP /=; smt().
            rewrite count_cat -Hcase //=.
          + by smt().
        apply (ler_trans
-         ((_ioram.`counters b0) + (b2i (b.`2.[size _ioram.`bpath] = b0)))
+         ((_ioram.`counters b0) + (b2i (t.`2.[size _ioram.`bpath] = b0)))
        ); last by smt().
        (* from here, we are going to show that a <= x /\ b <= y so that a + b <= x + y *)
        have: (count
-               (fun (b1 : block) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
+               (fun (b1 : tuple) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
                (flatten (map _oram.`bucket (prefixes _ioram.`bpath))))
           <= (_ioram.`counters b0).
        + apply (ler_trans
             (count
-                (fun (b1 : block) =>
+                (fun (b1 : tuple) =>
                     isprefix (_ioram.`bpath ++ [b0]) b1.`2)
                 (flatten (map _oram.`bucket (prefixes _ioram.`bpath))))
          ).
@@ -3423,27 +3426,27 @@ hasP /=; smt().
            apply count_eq_elem => />.
          by exact Hcount.
        have: (count
-                 (fun (b1 : block) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
+                 (fun (t : tuple) => isprefix (_ioram.`bpath ++ [b0]) t.`2)
                  (flatten
-                   (map (fun (path : path) => if path = [] then [b] else [])
+                   (map (fun (path : path) => if path = [] then [t] else [])
                      (prefixes _ioram.`bpath))))
-                <= (b2i (b.`2.[size _ioram.`bpath] = b0)).
+                <= (b2i (t.`2.[size _ioram.`bpath] = b0)).
        + rewrite /prefixes -!map_comp /(\o).
          rewrite range_ltn; 1: by smt(List.size_ge0).
          rewrite map_cons => /> //=.
          rewrite take0 => /> //=.
          rewrite flatten_cons.
          have->: (flatten
-                   (map (fun (x : int) => if take x _ioram.`bpath = [] then [b] else [])
+                   (map (fun (x : int) => if take x _ioram.`bpath = [] then [t] else [])
                      (range 1 (size _ioram.`bpath + 1)))) = [].
          + apply flatten_map_nil.
            + by smt(mem_range size_take).
          + rewrite cats0 count_seq1 //= &(le_b2i) eq_sym => *.
            have ?: b0 = nth witness (_ioram.`bpath ++ [b0]) (size _ioram.`bpath) by rewrite nth_cat //=.
-           have ?: b.`2.[size _ioram.`bpath] = (take (size (_ioram.`bpath ++ [b0])) b.`2).[size _ioram.`bpath] by smt(size_cat nth_take size1).
+           have ?: t.`2.[size _ioram.`bpath] = (take (size (_ioram.`bpath ++ [b0])) t.`2).[size _ioram.`bpath] by smt(size_cat nth_take size1).
            by smt().
         by smt().
-   (* the case that the path of the putback block is NOT in the subtree of bpath *)
+   (* the case that the path of the putback tuple is NOT in the subtree of bpath *)
    - split.
      - smt(is_oram_is_oram_putback).
        (* is_ioram has been trivally solved *)
@@ -3451,14 +3454,14 @@ hasP /=; smt().
        move => b0 @/predT @/"_.[_<-_]" /> //=.
        apply
          (ler_trans
-            (count (fun (b1 : block) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
+            (count (fun (b1 : tuple) => isprefix (_ioram.`bpath ++ [b0]) b1.`2)
                (flatten (map _oram.`bucket (prefixes _ioram.`bpath))))).
        - rewrite !count_flatten -!map_comp !sumzE !BIA.big_mapT /(\o) /=.
          apply ler_sum_seq => i /mem_range rgi _ /=.
          case _: ([] = _) => //= eq.
          - rewrite count_cat /= (_ : b2i _ = 0) //=.
            - apply b2i_eq0.
-             have ?: !isprefix _ioram.`bpath b.`2 by done.
+             have ?: !isprefix _ioram.`bpath t.`2 by done.
              by smt(isprefix_catL).
            rewrite {2} eq ler_eqVlt; left.
            apply count_eq_elem => /#.
@@ -3480,7 +3483,7 @@ hasP /=; smt().
    while (={i, p}
       /\ (0 <= i{1} <= size p{1})
       /\ (exists C, internal_rel C _h o{1} o{2})
-      (* all blocks at n can pass the filter *)
+      (* all tuples at n can pass the filter *)
       (* main loop invariant *)
       /\ (ORAM.overflow{1} bp
             => o{2}.`ioverflow false \/ o{2}.`ioverflow true)
@@ -3530,7 +3533,7 @@ hasP /=; smt().
    (*      /\ pos{1} = p0{2} *)
    (*      /\ (0 <= i{1} < size p{1}) *)
    (*      /\ (internal_rel (predU C (pred1 c{1})) _h oram{1} oram{2}) *)
-   (*     ecall (internal_putback (predI C (predC1 c{1})) _h oram{1} oram{2} (c{1}, pos{1}, block{1}.`3)). *)
+   (*     ecall (internal_putback (predI C (predC1 c{1})) _h oram{1} oram{2} (c{1}, pos{1}, tuple{1}.`3)). *)
    (*     + auto => /> &1 &2 *; do! split. *)
    (*       + move => *; do! split. *)
    (*         + by smt(). *)
@@ -3657,7 +3660,7 @@ hasP /=; smt().
     /\ loram.`lheight = h
     /\ is_oram C oram
     /\ is_loram loram
-    /\ (let bcks : block list list = map (fun p => oram.`bucket p) (prefixes loram.`lpath) in
+    /\ (let bcks : tuple list list = map (fun p => oram.`bucket p) (prefixes loram.`lpath) in
             count (fun v : _ * _ * _ => v.`2 = loram.`lpath) (flatten bcks)
          <= loram.`counter).
 
@@ -3666,7 +3669,7 @@ hasP /=; smt().
      /\ loram.`lheight = h
      /\ is_oram_fetch C c oram
      /\ is_loram loram
-    /\ (let bcks : block list list = map (fun p => oram.`bucket p) (prefixes loram.`lpath) in
+    /\ (let bcks : tuple list list = map (fun p => oram.`bucket p) (prefixes loram.`lpath) in
             count (fun v : _ * _ * _ => v.`2 = loram.`lpath) (flatten bcks)
          <= loram.`counter).
 
@@ -3700,8 +3703,8 @@ hasP /=; smt().
      /\ leaf_rel_fetch C h c0 oram{1} oram{2}
      /\ (forall _p _i, 0 <= _i < i{1} =>
                         size _p = oram{1}.`height =>
-            let block = oram{1}.`bucket (take _i _p) in
-              !(has (fun (block : block) => block.`1 = c0) block)))
+            let tuple = oram{1}.`bucket (take _i _p) in
+              !(has (fun (tuple : tuple) => tuple.`1 = c0) tuple)))
     (oram{1}.`height - i{1} + 1).
   (* inv => inv *)
   + auto => /> &hr 7? He 5? H_count *; do split.
@@ -3731,7 +3734,7 @@ hasP /=; smt().
                 (fun (x : int) =>
                 oram{hr}.`bucket.[take i{hr} (oram{hr}.`positions c0) <-
                     trim (oram{hr}.`bucket (take i{hr} (oram{hr}.`positions c0)))
-                    (find (fun (x0 : block) => x0.`1 = c0) (oram{hr}.`bucket
+                    (find (fun (x0 : tuple) => x0.`1 = c0) (oram{hr}.`bucket
                         (take i{hr} (oram{hr}.`positions c0))))]
                 (take x oram{m}.`lpath)) (range 0 i{hr}))
           = (map
@@ -3746,7 +3749,7 @@ hasP /=; smt().
                 (fun (x : int) =>
                     oram{hr}.`bucket.[take i{hr} (oram{hr}.`positions c0) <-
                     trim (oram{hr}.`bucket (take i{hr} (oram{hr}.`positions c0)))
-                        (find (fun (x0 : block) => x0.`1 = c0) (oram{hr}.`bucket
+                        (find (fun (x0 : tuple) => x0.`1 = c0) (oram{hr}.`bucket
                         (take i{hr} (oram{hr}.`positions c0))))]
                     (take x oram{m}.`lpath))
                 (range (i{hr} + 1) (size oram{m}.`lpath + 1)))
@@ -3814,13 +3817,13 @@ hasP /=; smt().
      /\ oram{2} = lo
      /\ oram{1}.`height = oram{2}.`lheight
      /\ leaf_rel C h o lo
-     /\ leaf_rel (predI C (fun c => size pushed{1} <= find (fun (b : block) => b.`1 = c) pushed{1})) h oram{1} oram{2}
-     /\ (let bcks : block list list = map (fun p => oram{1}.`bucket p{1}) (prefixes oram{2}.`lpath) in
+     /\ leaf_rel (predI C (fun c => size pushed{1} <= find (fun (t : tuple) => t.`1 = c) pushed{1})) h oram{1} oram{2}
+     /\ (let bcks : tuple list list = map (fun p => oram{1}.`bucket p{1}) (prefixes oram{2}.`lpath) in
             count
                (fun v : _ * _ * _ => v.`2 = oram{2}.`lpath)
                (flatten bcks ++ (if take i{1} p{1} = take i{1} oram{2}.`lpath then pushed{1} else []))
          <= oram{2}.`counter)
-     (* block is in pushed iff it was higher up in the path of _oram, agress on the flushing path p, and it's not in the higher path of the current oram *)
+     (* tuple is in pushed iff it was higher up in the path of _oram, agress on the flushing path p, and it's not in the higher path of the current oram *)
      /\ (forall bb, bb \in pushed{1} <=>
              (i{1} <= o.`height
            /\ take i{1} bb.`2 = take i{1} p{1}
@@ -3833,9 +3836,9 @@ hasP /=; smt().
            => i1 = i2)
      (* Whatever is in current oram first levels is not in pushed and it was somewhere above in the original _oram *)
      /\ (forall _p, size _p < i{1} =>
-          (all (fun (block : block) =>
-            !block \in pushed{1} /\
-             (exists ii, 0<= ii <= size _p /\ block \in o.`bucket (take ii _p))) (oram{1}.`bucket _p)))
+          (all (fun (tuple : tuple) =>
+            !tuple \in pushed{1} /\
+             (exists ii, 0<= ii <= size _p /\ tuple \in o.`bucket (take ii _p))) (oram{1}.`bucket _p)))
      (* Whatever is in current oram later levels is untouched from _oram *)
      /\ (forall _p, i{1} <= size _p <= oram{1}.`height => oram{1}.`bucket _p = o.`bucket _p)
   ) (oram{1}.`height - i{1} + 1).
@@ -3846,37 +3849,37 @@ hasP /=; smt().
     pose newpushed := (if i{hr} = oram{hr}.`height then []
         else
           filter
-            (fun (block : block) =>
-               take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{hr})
+            (fun (tuple : tuple) =>
+               take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{hr})
             (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{hr}))).
     pose stayhere := if i{hr} = oram{hr}.`height then
                  pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{hr})
                else
                  filter
-                   (fun (block : block) =>
-                      take (i{hr} + 1) block.`2 <> take (i{hr} + 1) p{hr})
+                   (fun (tuple : tuple) =>
+                      take (i{hr} + 1) tuple.`2 <> take (i{hr} + 1) p{hr})
                    (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{hr})).
 
      (* setting the ground *)
-     have ? : forall b, (!b \in newpushed /\ !b \in stayhere) => !b \in pushed{hr}.
+     have ? : forall t, (!t \in newpushed /\ !t \in stayhere) => !t \in pushed{hr}.
      + case (i{hr} = oram{hr}.`height); 1: by smt(mem_cat).
-       by rewrite /newpushed /stayhere => ->b /=; rewrite !mem_filter !mem_cat /#.
+       by rewrite /newpushed /stayhere => ->t /=; rewrite !mem_filter !mem_cat /#.
 
-     have ? : forall b, b \in stayhere => !b \in pushed{hr} => b \in oram{hr}.`bucket (take i{hr} p{hr}).
+     have ? : forall t, t \in stayhere => !t \in pushed{hr} => t \in oram{hr}.`bucket (take i{hr} p{hr}).
      + rewrite /stayhere;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
-     have H_newpushed_not_pushed : forall b, b \in newpushed => !b \in pushed{hr} => b \in oram{hr}.`bucket (take i{hr} p{hr}).
+     have H_newpushed_not_pushed : forall t, t \in newpushed => !t \in pushed{hr} => t \in oram{hr}.`bucket (take i{hr} p{hr}).
      + rewrite /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
-     have ? : forall b, b \in stayhere => !b \in newpushed.
+     have ? : forall t, t \in stayhere => !t \in newpushed.
      + rewrite /stayhere /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
-     have ? : forall b, !b \in stayhere => !b \in newpushed => !b \in oram{hr}.`bucket (take i{hr} p{hr}).
+     have ? : forall t, !t \in stayhere => !t \in newpushed => !t \in oram{hr}.`bucket (take i{hr} p{hr}).
      + rewrite /stayhere /newpushed;case (i{hr} = oram{hr}.`height) => ?/=;1: by smt(mem_cat).
-        by move => b;rewrite !mem_filter !mem_cat /#.
+        by move => t;rewrite !mem_filter !mem_cat /#.
 
      have ?: forall bb1 bb2, bb1 \in stayhere => bb2 \in newpushed => bb1.`2 <> bb2.`2.
      + rewrite /stayhere /newpushed => bb1 bb2.
@@ -3885,103 +3888,103 @@ hasP /=; smt().
 
      have Hsep : forall bb pp, size pp <= oram{hr}.`height =>
          bb \in oram{hr}.`bucket.[take i{hr} p{hr} <- stayhere] pp =>
-             size newpushed <= find (fun (b : block) => b.`1 = bb.`1) newpushed.
+             size newpushed <= find (fun (t : tuple) => t.`1 = bb.`1) newpushed.
     + have: is_oram C o by assumption.
       rewrite /is_oram => /> 5? Hinjb ?.
       move => bb pp ??;
-       have [ _ Hin]  := find_rng_in newpushed (fun (b : block) => b.`1 = bb.`1).
+       have [ _ Hin]  := find_rng_in newpushed (fun (t : tuple) => t.`1 = bb.`1).
        rewrite implybE in Hin;elim Hin;1: by smt(find_ge0).
        rewrite hasP=> Hex;elim Hex => b2 /= *.
        case (b2 \in stayhere) => *; 1: by smt().
-       case (i{hr} < size pp) => *.  (* block is below *)
+       case (i{hr} < size pp) => *.  (* tuple is below *)
         + have ? : bb \in o.`bucket pp by smt(size_take).
-          pose i1 := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket pp).
-          have i1b := find_rng_in (o.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+          pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket pp).
+          have i1b := find_rng_in (o.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
               have := Hinjb (take i2' p{hr}) pp i2f i1 _ _ _;2,4:smt(size_take nth_find mem_nth).
-              + have := (find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : block) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _;1: by rewrite ?
+              + have := (find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1));1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _;1: by rewrite ?
 hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _;rewrite ?
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _;rewrite ?
 hasP /=; smt().
           have ? : b2 \in o.`bucket (take i{hr} p{hr}) by smt(size_take).
-          pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})).
+          pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})).
           have := Hinjb (take i{hr} p{hr}) pp i2f i1 _ _ _;2,4:smt().
-              + have :=  find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              have /= :=  nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _;1: by rewrite hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+              + have :=  find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              have /= :=  nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _;1: by rewrite hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
         case (size pp < i{hr}) => *.
-        (* block is above *)
+        (* tuple is above *)
         + have ? : pp <> take i{hr} p{hr} by smt(size_take).
           move : (H1 pp _); 1: by smt().
           rewrite allP => /> Hbs; move : (Hbs bb _);1:smt().
           move =>  [#? Hex];elim Hex => i1' *.
           have ? : bb \in o.`bucket (take i1' pp) by smt().
-          pose i1f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i1' pp)).
+          pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i1' pp)).
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
               have := Hinjb (take i2' p{hr}) (take i1' pp) i2f i1f _ _ _; 4:  by smt().
-              + have := find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _.
+              + have := find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _.
               + rewrite ?hasP /=.
                 exists b2.
                 by smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket (take i1' pp)) _.
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket (take i1' pp)) _.
               + rewrite ?hasP.
                 exists bb.
                 by smt().
               by smt().
 
           have ? : b2 \in o.`bucket (take i{hr} p{hr}) by smt(size_take).
-          pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})).
+          pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})).
           have := Hinjb (take i{hr} p{hr}) (take i1' pp) i2f i1f _ _ _;4:smt(size_take).
-          + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-          + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-          have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _;1: by rewrite ?hasP;smt(nth_find).
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
+          + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+          + have := find_rng_in (o.`bucket (take i1' pp)) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+          have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _;1: by rewrite ?hasP;smt(nth_find).
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket (take i1' pp)) _; by rewrite ?hasP /=; smt().
 
-        + (* block is at this level *)
+        + (* tuple is at this level *)
           case (pp = take i{hr} p{hr}) => *; last first.
           + have Hinn : bb \in o.`bucket pp by smt().
-          pose i1 := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket pp).
-          have i1b := find_rng_in (o.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+          pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket pp).
+          have i1b := find_rng_in (o.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
           case (b2 \in pushed{hr}) => Hb2.
             + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-              pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
+              pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
               have := Hinjb (take i2' p{hr}) pp i2f i1 _ _ _;2,4:smt(size_take).
-              + have := find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _;1: by rewrite ?hasP;smt(nth_find).
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+              + have := find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _;1: by rewrite ?hasP;smt(nth_find).
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
 
             have ? : b2 \in o.`bucket (take i{hr} p{hr}) by smt(size_take).
-            pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})).
+            pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})).
             have := Hinjb (take i{hr} p{hr}) pp i2f i1 _ _ _;2,4:smt(size_take).
-            + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-            have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _;1: by rewrite ?hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+            + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+            have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _;1: by rewrite ?hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
 
         + have ? : bb \in stayhere;1: by smt().
           case (bb \in pushed{hr}) => Hpps;last first.
           +  have ? : bb \in (o.`bucket pp) by smt().
-             pose i1 := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket pp).
-             have i1b := find_rng_in (o.`bucket pp) (fun (bf : block) => bf.`1 = bb.`1); rewrite hasP in i1b.
+             pose i1 := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket pp).
+             have i1b := find_rng_in (o.`bucket pp) (fun (bf : tuple) => bf.`1 = bb.`1); rewrite hasP in i1b.
              case (b2 \in pushed{hr}) => Hb2.
               + move : (H3 b2);rewrite Hb2 /= => [#?? Hex];elim Hex => i2' *.
-                pose i2f := find (fun (b : block) => b.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
+                pose i2f := find (fun (t : tuple) => t.`1 = b2.`1) (o.`bucket (take i2' p{hr})).
                 have := Hinjb (take i2' p{hr}) pp i2f i1 _ _ _;2,4:smt().
-                + have := find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-                have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _;1: by rewrite ?hasP /=; smt().
-              have /= := nth_find witness  (fun (bf : block) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
+                + have := find_rng_in (o.`bucket (take i2' p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+                have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i2' p{hr})) _;1: by rewrite ?hasP /=; smt().
+              have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = bb.`1) (o.`bucket pp) _; by rewrite ?hasP /=; smt().
 
              have ? : b2 \in o.`bucket (take i{hr} p{hr}) by smt().
-             pose i2f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i{hr} p{hr})).
+             pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i{hr} p{hr})).
              have := Hinjb (take i{hr} p{hr}) pp i2f i1 _ _ _;2,4:smt().
-             + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : block) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
-             have /= := nth_find witness  (fun (bf : block) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _; by rewrite ?hasP /=; smt().
+             + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : tuple) => bf.`1 = b2.`1);1: by rewrite hasP; smt().
+             have /= := nth_find witness  (fun (bf : tuple) => bf.`1 = b2.`1) (o.`bucket (take i{hr} p{hr})) _; by rewrite ?hasP /=; smt().
 
              case (b2 \in pushed{hr}) => Hb2.
               + pose i1f := find (pred1 bb) pushed{hr}.
@@ -3989,23 +3992,23 @@ hasP /=; smt().
                 move : (H4 i1f i2f); smt().
 
              move : (H3 bb);rewrite Hpps /= => [#?? Hex];elim Hex => i1' *.
-             pose i1f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i1' p{hr})).
+             pose i1f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i1' p{hr})).
              have ? : b2 \in o.`bucket (take i{hr} p{hr}) by smt().
-             pose i2f := find (fun (b : block) => b.`1 = bb.`1) (o.`bucket (take i{hr} p{hr})).
+             pose i2f := find (fun (t : tuple) => t.`1 = bb.`1) (o.`bucket (take i{hr} p{hr})).
              have := Hinjb (take i{hr} p{hr}) (take i1' p{hr}) i2f i1f _ _ _;3..:smt().
-             + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
-             + have := find_rng_in (o.`bucket (take i1' p{hr})) (fun (bf : block) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+             + have := find_rng_in (o.`bucket (take i{hr} p{hr})) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
+             + have := find_rng_in (o.`bucket (take i1' p{hr})) (fun (bf : tuple) => bf.`1 = bb.`1);1: by rewrite hasP; smt().
 
       (* pushed{hr} + bucket (take i{hr} p{hr}) = stayhere + newpushed *)
-      have ?: forall b, (b \in pushed{hr} \/ b \in (oram{hr}.`bucket (take i{hr} p{hr}))) <=> (b \in stayhere \/ b \in newpushed).
+      have ?: forall t, (t \in pushed{hr} \/ t \in (oram{hr}.`bucket (take i{hr} p{hr}))) <=> (t \in stayhere \/ t \in newpushed).
       + smt().
 
       (* pushed{hr} /\ bucket (take i{hr} p{hr}) = \emptyset *)
-      (* have ?: forall b, (b \in pushed{hr}) => !b \in (oram{hr}.`bucket (take i{hr} p{hr})). *)
+      (* have ?: forall t, (t \in pushed{hr}) => !t \in (oram{hr}.`bucket (take i{hr} p{hr})). *)
       (* + smt(). *)
 
       (* stayhere /\ newpushed = \emptyset *)
-      have ?: forall b, (b \in stayhere) => !(b \in newpushed).
+      have ?: forall t, (t \in stayhere) => !(t \in newpushed).
       + smt().
 
       have ?: perm_eq (pushed{hr} ++ (oram{hr}.`bucket (take i{hr} p{hr}))) (stayhere ++ newpushed).
@@ -4013,11 +4016,11 @@ hasP /=; smt().
         case: (i{hr} = oram{hr}.`height) => ?.
         + rewrite cats0 perm_eq_refl //=.
         + rewrite (_:
-             (fun (block : block) =>
-                 take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{hr})
+             (fun (tuple : tuple) =>
+                 take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{hr})
            = predC
-                 (fun (block : block) =>
-                     take (i{hr} + 1) block.`2 <> take (i{hr} + 1) p{hr})).
+                 (fun (tuple : tuple) =>
+                     take (i{hr} + 1) tuple.`2 <> take (i{hr} + 1) p{hr})).
           + rewrite /predC //=.
           rewrite perm_eq_sym perm_filterC.
 
@@ -4118,8 +4121,8 @@ hasP /=; smt().
         case (i{hr} = oram{hr}.`height) => ?; 1:smt().
         have /= HH := (filter_inj
            (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{hr}))
-           (fun (b : block) => b.`1)
-           (fun (block : block) => take (i{hr} + 1) block.`2 = take (i{hr} + 1) p{hr})).
+           (fun (t : tuple) => t.`1)
+           (fun (tuple : tuple) => take (i{hr} + 1) tuple.`2 = take (i{hr} + 1) p{hr})).
         have ? : (forall (i1 i2 : int),
          0 <= i1 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{hr})) =>
          0 <= i2 < size (pushed{hr} ++ oram{hr}.`bucket (take i{hr} p{hr})) =>
@@ -4174,11 +4177,11 @@ hasP /=; smt().
            rewrite (_: take ii pp = take ii (take i{hr} pp)); 1: smt(take_take).
            by smt().
         have ? : bb \in o.`bucket (take i{hr} pp) by smt(take_size).
-           have := block_props C o bb (take i{hr} pp) _; last by smt().
+           have := tuple_props C o bb (take i{hr} pp) _; last by smt().
            by assumption.
        (* it remains to prove not in newpushed *)
        have := Hsep bb pp _ _;1,2: smt().
-       have := find_rng_out newpushed (fun (b : block) => b.`1 = bb.`1) .
+       have := find_rng_out newpushed (fun (t : tuple) => t.`1 = bb.`1) .
        rewrite hasP => /=;smt().
 
      + smt(size_take).
@@ -4194,20 +4197,20 @@ hasP /=; smt().
         have Hpushed_L: pushed_L = [] by smt(mem_eq0).
         rewrite -(_:
             (predI C
-                (fun (c : cell) => size pushed_L <= find (fun (b : block) => b.`1 = c) pushed_L))
+                (fun (c : cell) => size pushed_L <= find (fun (t : tuple) => t.`1 = c) pushed_L))
           = C) 1: /#.
         by assumption.
 qed.
 
-  lemma leaf_putback (C : cell -> bool) (h : int) (o : oram) (lo : loram) (b : block) :
+  lemma leaf_putback (C : cell -> bool) (h : int) (o : oram) (lo : loram) (t : tuple) :
     equiv[ORAM.putback ~ LeafORAM.putback :
-        arg{1} = (o, b)
-     /\ arg{2} = (lo, b.`2)
-     /\ !C b.`1
+        arg{1} = (o, t)
+     /\ arg{2} = (lo, t.`2)
+     /\ !C t.`1
      /\ leaf_rel C h o lo
-     /\ o.`positions b.`1 = b.`2
+     /\ o.`positions t.`1 = t.`2
     ==>
-        leaf_rel (predU C (pred1 b.`1)) h res{1} res{2}
+        leaf_rel (predU C (pred1 t.`1)) h res{1} res{2}
   ].
   proof.
   proc => //=.
@@ -4225,7 +4228,7 @@ qed.
       rewrite (_:
         (map
             (fun (x : int) =>
-            if [] = take x lo.`lpath then o.`bucket [] ++ [b]
+            if [] = take x lo.`lpath then o.`bucket [] ++ [t]
             else o.`bucket (take x lo.`lpath)) (range 1 (size lo.`lpath + 1)))
       =
         (map (fun (x : int) => o.`bucket (take x lo.`lpath))
@@ -4256,7 +4259,7 @@ qed.
       rewrite (_:
         (map
             (fun (x : int) =>
-            if [] = take x lo.`lpath then o.`bucket [] ++ [b]
+            if [] = take x lo.`lpath then o.`bucket [] ++ [t]
             else o.`bucket (take x lo.`lpath)) (range 1 (size lo.`lpath + 1)))
       =
         (map (fun (x : int) => o.`bucket (take x lo.`lpath))
@@ -4264,7 +4267,7 @@ qed.
       ).
       + by smt(eq_in_map mem_range).
       rewrite !map1 //= !flatten1 take0 //= count_cat.
-      have: count (fun (v : cell * path * value) => v.`2 = lo.`lpath) [b] = 0.
+      have: count (fun (v : cell * path * value) => v.`2 = lo.`lpath) [t] = 0.
       + apply count_eq0 => /#.
       by smt().
   qed.
@@ -4277,7 +4280,7 @@ qed.
                /\ !(ORAM.overflow{1} _loram.`lpath)
            ==>
               ORAM.overflow{1} _loram.`lpath => res.`loverflow{2}
-              (* (let bcks : block list list = map (fun p => res{1}.`1.`bucket p) (prefixes res{2}.`lpath) in *)
+              (* (let bcks : tuple list list = map (fun p => res{1}.`1.`bucket p) (prefixes res{2}.`lpath) in *)
               (*       count (fun v : _ * _ * _ => v.`2 = res{2}.`lpath) (flatten bcks) *)
               (*   <= res{2}.`counter) *)
        ].
@@ -4322,7 +4325,7 @@ qed.
        /\ (0 <= i{1} < size p{1})
        /\ (leaf_rel (predU C (pred1 c{1})) _h oram{1} oram{2})
       ).
-      ecall (leaf_putback (predI C (predC1 c{1})) _h oram{1} oram{2} (c{1}, pos{1}, block{1}.`3)).
+      ecall (leaf_putback (predI C (predC1 c{1})) _h oram{1} oram{2} (c{1}, pos{1}, tuple{1}.`3)).
       + auto => /> &1 &2 *; do! split.
         + move => *; do! split.
           + by smt().
