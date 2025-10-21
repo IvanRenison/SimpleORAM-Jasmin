@@ -16,11 +16,11 @@ const ull N_queries = 100; // Amount of queries for multi-query operation
 
 const ull N = (n + b_sz - 1) / b_sz; // Amount of blocks
 
-extern "C" void initORAM_export(ull* Pos, ull* oram);
+extern "C" u8 initORAM_export(ull* Pos, ull* oram);
 extern "C" pair<ull, ull> fetch_export(ull* Pos, ull* oram, ull* res, ull i);
-extern "C" void pushDown_export(ull* oram);
-extern "C" ull read_write_export(ull* Pos, ull* oram, ull in, ull v, u8 ty);
-extern "C" void read_write_block_export(ull* Pos, ull* oram, ull* ans, ull i, ull* vs, u8 ty);
+extern "C" u8 pushDown_export(ull* oram);
+extern "C" pair<ull, u8> read_write_export(ull* Pos, ull* oram, ull in, ull v, u8 ty);
+extern "C" u8 read_write_block_export(ull* Pos, ull* oram, ull* ans, ull i, ull* vs, u8 ty);
 
 struct Query {
   ull ty; // 0 for only read, 1 for read and write
@@ -28,7 +28,7 @@ struct Query {
   ull v;  // value to write if ty = 1
 } __attribute__((packed));
 
-extern "C" void multiQuery_export(ull* Pos, ull* oram, ull* ans, Query* queries);
+extern "C" u8 multiQuery_export(ull* Pos, ull* oram, ull* ans, Query* queries);
 
 struct QueryBlock {
   ull ty;              // 0 for only read, 1 for read and write
@@ -36,7 +36,7 @@ struct QueryBlock {
   array<ull, b_sz> v;  // values to write if ty = 1
 } __attribute__((packed));;
 
-extern "C" void multiQuery_blocks_export(ull* Pos, ull* oram, ull* ans, QueryBlock* queries);
+extern "C" u8 multiQuery_blocks_export(ull* Pos, ull* oram, ull* ans, QueryBlock* queries);
 
 
 struct NodeElem {
@@ -166,7 +166,7 @@ void test_empty_read(ull* Pos, ull* oram_, array<ull, n> real_mem) {
   for (ull it = 0; it < 100; it++) {
     ull in = rand() % n;
 
-    ull val = read_write_export(Pos, oram_, in, 0, 0);
+    auto [val, _] = read_write_export(Pos, oram_, in, 0, 0);
     assert(val == 0);
 
     assert(checkInvariant(Pos, oram_, real_mem));
@@ -216,12 +216,12 @@ int main() {
       ull t = rand() % 2;
 
       if (t) { // Read
-        ull v = read_write_export(Pos, oram_, in, 0, 0);
+        auto [v, _] = read_write_export(Pos, oram_, in, 0, 0);
         assert(v == mem[in]);
         assert(checkInvariant(Pos, oram_, mem));
       } else { // Write
         ull v = rand();
-        ull v2 = read_write_export(Pos, oram_, in, v, 1);
+        auto [v2, _] = read_write_export(Pos, oram_, in, v, 1);
         assert(v2 == mem[in]);
         mem[in] = v;
         assert(checkInvariant(Pos, oram_, mem));

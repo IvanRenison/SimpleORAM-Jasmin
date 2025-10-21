@@ -130,7 +130,7 @@ module M(SC:Syscall_t) = {
     return ((LeakList leak), cond);
   }
   proc addToNode (node:BArray1536.t, nodeElem:BArray48.t, real:W8.t) : 
-  JLeakage.leakage * BArray1536.t = {
+  JLeakage.leakage * BArray1536.t * W8.t = {
     var _b:JLeakage.leakages;
     var _b_0:JLeakage.leakages;
     var leak:JLeakage.leakages;
@@ -138,6 +138,7 @@ module M(SC:Syscall_t) = {
     var leak_1:JLeakage.leakages;
     var leak_cond:JLeakage.leakages;
     var leak_cond_0:JLeakage.leakages;
+    var overflow:W8.t;
     var i:W64.t;
     var pos:W64.t;
     var vals:BArray32.t;
@@ -236,7 +237,9 @@ module M(SC:Syscall_t) = {
       (leak_cond ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
-    return ((LeakList leak), node);
+    overflow <- flag;
+    overflow <- (invw overflow);
+    return ((LeakList leak), node, overflow);
   }
   proc fetch (pos:BArray512.t, oram:BArray196608.t, res_0:BArray48.t, i:W64.t) : 
   JLeakage.leakage * BArray512.t * BArray196608.t * BArray48.t * W64.t *
@@ -378,7 +381,8 @@ module M(SC:Syscall_t) = {
     ans_k <- ans_k;
     return ((LeakList leak), pos, oram, res_0, ans_j, ans_k);
   }
-  proc pushDown (oram:BArray196608.t) : JLeakage.leakage * BArray196608.t = {
+  proc pushDown (oram:BArray196608.t) : JLeakage.leakage * BArray196608.t *
+                                        W8.t = {
     var _b:JLeakage.leakages;
     var _b_0:JLeakage.leakages;
     var leak:JLeakage.leakages;
@@ -388,6 +392,7 @@ module M(SC:Syscall_t) = {
     var leak_c:JLeakage.leakage;
     var leak_cond:JLeakage.leakages;
     var leak_cond_0:JLeakage.leakages;
+    var overflow:W8.t;
     var n_reg:W64.t;
     var ix0:W64.t;
     var l:W64.t;
@@ -403,6 +408,7 @@ module M(SC:Syscall_t) = {
     var b_cond:bool;
     var cond:W8.t;
     var this_nodeElem_toAdd:BArray48.t;
+    var this_overflow:W8.t;
     var next_l:W64.t;
     var next_ix:W64.t;
     var ik_1:W64.t;
@@ -413,6 +419,7 @@ module M(SC:Syscall_t) = {
     var isDes:W8.t;
     var cond_b:bool;
     var cond_0:W8.t;
+    var this_overflow_0:W8.t;
     var new_i:W64.t;
     var n_reg_0:W64.t;
     node <- witness;
@@ -445,6 +452,7 @@ module M(SC:Syscall_t) = {
       (leak_cond ++ [(LeakList [(Leak_bool (k \ult (W64.of_int 32)))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    overflow <- (W8.of_int 0);
     leak_cond <- [];
     _b <- [];
     leak_cond <-
@@ -469,6 +477,7 @@ module M(SC:Syscall_t) = {
         leak_1 <- [];
         ik_0 <- (k_0 * (W64.of_int (2 + 4)));
         (* Erased call to spill *)
+        (* Erased call to spill *)
         leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
         i <- (BArray1536.get64 toAdd (W64.to_uint ik_0));
         b_cond <- (i <> (W64.of_int (((256 + 4) - 1) %/ 4)));
@@ -477,9 +486,12 @@ module M(SC:Syscall_t) = {
         this_nodeElem_toAdd <-
         (SBArray1536_48.get_sub64 toAdd (W64.to_uint ik_0));
         node <- node;
-        (leak_c, node) <@ addToNode (node, this_nodeElem_toAdd, cond);
+        (leak_c, node, this_overflow) <@ addToNode (node,
+        this_nodeElem_toAdd, cond);
         leak_1 <- (leak_1 ++ [leak_c]);
         node <- node;
+        (* Erased call to unspill *)
+        overflow <- (overflow `|` this_overflow);
         leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
         toAdd <-
         (BArray1536.set64 toAdd (W64.to_uint ik_0)
@@ -514,6 +526,7 @@ module M(SC:Syscall_t) = {
           leak_2 <- [];
           ik_1 <- (k_0 * (W64.of_int (2 + 4)));
           (* Erased call to spill *)
+          (* Erased call to spill *)
           leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint ik_1))])]);
           this_i <- (BArray1536.get64 node (W64.to_uint ik_1));
           leak_2 <-
@@ -532,8 +545,11 @@ module M(SC:Syscall_t) = {
           cond_b <- (this_i <> (W64.of_int (((256 + 4) - 1) %/ 4)));
           cond_0 <- (SETcc cond_b);
           cond_0 <- (cond_0 `&` isDes);
-          (leak_c, toAdd) <@ addToNode (toAdd, this_nodeElem, cond_0);
+          (leak_c, toAdd, this_overflow_0) <@ addToNode (toAdd,
+          this_nodeElem, cond_0);
           leak_2 <- (leak_2 ++ [leak_c]);
+          (* Erased call to unspill *)
+          overflow <- (overflow `|` this_overflow_0);
           new_i <- this_i;
           cond_b <- (cond_0 = (W8.of_int 1));
           n_reg_0 <- (W64.of_int (((256 + 4) - 1) %/ 4));
@@ -564,21 +580,24 @@ module M(SC:Syscall_t) = {
       (leak_cond ++ [(LeakList [(Leak_bool ((W64.of_int 0) \ult l))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
-    return ((LeakList leak), oram);
+    return ((LeakList leak), oram, overflow);
   }
   proc pushDown_export (oram:BArray196608.t) : JLeakage.leakage *
-                                               BArray196608.t = {
+                                               BArray196608.t * W8.t = {
     var leak:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
+    var overflow:W8.t;
     leak <- [];
     oram <- oram;
-    (leak_c, oram) <@ pushDown (oram);
+    (leak_c, oram, overflow) <@ pushDown (oram);
     leak <- (leak ++ [leak_c]);
-    return ((LeakList leak), oram);
+    overflow <- overflow;
+    return ((LeakList leak), oram, overflow);
   }
   proc initORAM (pos:BArray512.t, oram:BArray196608.t) : JLeakage.leakage *
                                                          BArray512.t *
-                                                         BArray196608.t = {
+                                                         BArray196608.t *
+                                                         W8.t = {
     var _b:JLeakage.leakages;
     var _b_0:JLeakage.leakages;
     var leak:JLeakage.leakages;
@@ -587,6 +606,7 @@ module M(SC:Syscall_t) = {
     var leak_c:JLeakage.leakage;
     var leak_cond:JLeakage.leakages;
     var leak_cond_0:JLeakage.leakages;
+    var overflow:W8.t;
     var n2K:W64.t;
     var ix:W64.t;
     var pi:W64.t;
@@ -598,6 +618,7 @@ module M(SC:Syscall_t) = {
     var nodeElem:BArray48.t;
     var root_node:BArray1536.t;
     var tr:W8.t;
+    var this_overflow:W8.t;
     nodeElem <- witness;
     nodeElem_mem <- witness;
     root_node <- witness;
@@ -619,6 +640,7 @@ module M(SC:Syscall_t) = {
       leak_cond <- (leak_cond ++ [(LeakList [(Leak_bool (ix \ult n2K))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
+    overflow <- (W8.of_int 0);
     i <- (W64.of_int 0);
     leak_cond <- [];
     _b <- [];
@@ -627,6 +649,7 @@ module M(SC:Syscall_t) = {
     [(LeakList [(Leak_bool (i \ult (W64.of_int (((256 + 4) - 1) %/ 4))))])]);
     while ((i \ult (W64.of_int (((256 + 4) - 1) %/ 4)))) {
       leak_0 <- [];
+      (* Erased call to spill *)
       n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
       (leak_c, pos_0) <@ random (n_reg);
       leak_0 <- (leak_0 ++ [leak_c]);
@@ -663,13 +686,19 @@ module M(SC:Syscall_t) = {
       (* Erased call to spill *)
       (* Erased call to spill *)
       tr <- (W8.of_int 1);
-      (leak_c, root_node) <@ addToNode (root_node, nodeElem, tr);
+      (leak_c, root_node, this_overflow) <@ addToNode (root_node, nodeElem,
+      tr);
       leak_0 <- (leak_0 ++ [leak_c]);
+      (* Erased call to unspill *)
+      overflow <- (overflow `|` this_overflow);
+      (* Erased call to spill *)
       (* Erased call to unspill *)
       leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (32 * (2 + 4)))])]);
       oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-      (leak_c, oram) <@ pushDown (oram);
+      (leak_c, oram, this_overflow) <@ pushDown (oram);
       leak_0 <- (leak_0 ++ [leak_c]);
+      (* Erased call to unspill *)
+      overflow <- (overflow `|` this_overflow);
       (* Erased call to unspill *)
       (* Erased call to unspill *)
       i <- (i + (W64.of_int 1));
@@ -679,29 +708,33 @@ module M(SC:Syscall_t) = {
       [(LeakList [(Leak_bool (i \ult (W64.of_int (((256 + 4) - 1) %/ 4))))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
-    return ((LeakList leak), pos, oram);
+    return ((LeakList leak), pos, oram, overflow);
   }
   proc initORAM_export (pos:BArray512.t, oram:BArray196608.t) : JLeakage.leakage *
                                                                 BArray512.t *
-                                                                BArray196608.t = {
+                                                                BArray196608.t *
+                                                                W8.t = {
     var leak:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
+    var overflow:W8.t;
     leak <- [];
     pos <- pos;
     oram <- oram;
-    (leak_c, pos, oram) <@ initORAM (pos, oram);
+    (leak_c, pos, oram, overflow) <@ initORAM (pos, oram);
     leak <- (leak ++ [leak_c]);
-    return ((LeakList leak), pos, oram);
+    overflow <- overflow;
+    return ((LeakList leak), pos, oram, overflow);
   }
   proc read_write (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t, v:W64.t,
                    wr:W8.t) : JLeakage.leakage * BArray512.t *
-                              BArray196608.t * W64.t = {
+                              BArray196608.t * W64.t * W8.t = {
     var _b:JLeakage.leakages;
     var leak:JLeakage.leakages;
     var leak_0:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
     var leak_cond:JLeakage.leakages;
     var ans:W64.t;
+    var overflow:W8.t;
     var i:W64.t;
     var j:W64.t;
     var res_0:BArray48.t;
@@ -716,6 +749,7 @@ module M(SC:Syscall_t) = {
     var new_pos:W64.t;
     var root_node:BArray1536.t;
     var tr:W8.t;
+    var this_overflow:W8.t;
     var  _0:W64.t;
     var  _1:W64.t;
     res_0 <- witness;
@@ -737,6 +771,8 @@ module M(SC:Syscall_t) = {
     (* Erased call to unspill *)
     (* Erased call to unspill *)
     (* Erased call to spill *)
+    (* Erased call to spill *)
+    overflow <- (W8.of_int 0);
     (* Erased call to spill *)
     ji <- (W64.of_int 0);
     leak_cond <- [];
@@ -788,45 +824,53 @@ module M(SC:Syscall_t) = {
     (* Erased call to spill *)
     res_p <- res_p;
     tr <- (W8.of_int 1);
-    (leak_c, root_node) <@ addToNode (root_node, res_p, tr);
+    (leak_c, root_node, this_overflow) <@ addToNode (root_node, res_p, tr);
     leak <- (leak ++ [leak_c]);
+    (* Erased call to unspill *)
+    overflow <- (overflow `|` this_overflow);
+    (* Erased call to spill *)
     (* Erased call to unspill *)
     leak <- (leak ++ [(LeakList [(Leak_int (32 * (2 + 4)))])]);
     oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-    (leak_c, oram) <@ pushDown (oram);
+    (leak_c, oram, this_overflow) <@ pushDown (oram);
     leak <- (leak ++ [leak_c]);
     (* Erased call to unspill *)
     (* Erased call to unspill *)
-    return ((LeakList leak), pos, oram, ans);
+    (* Erased call to unspill *)
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
   proc read_write_export (pos:BArray512.t, oram:BArray196608.t, in_0:W64.t,
                           v:W64.t, wr:W8.t) : JLeakage.leakage *
                                               BArray512.t * BArray196608.t *
-                                              W64.t = {
+                                              W64.t * W8.t = {
     var leak:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
     var ans:W64.t;
+    var overflow:W8.t;
     leak <- [];
     pos <- pos;
     oram <- oram;
     in_0 <- in_0;
     v <- v;
     wr <- wr;
-    (leak_c, pos, oram, ans) <@ read_write (pos, oram, in_0, v, wr);
+    (leak_c, pos, oram, ans, overflow) <@ read_write (pos, oram, in_0, 
+    v, wr);
     leak <- (leak ++ [leak_c]);
     pos <- pos;
     oram <- oram;
     ans <- ans;
-    return ((LeakList leak), pos, oram, ans);
+    overflow <- overflow;
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
   proc read_write_block (pos:BArray512.t, oram:BArray196608.t,
                          ans:BArray32.t, i:W64.t, vals:BArray32.t, wr:W8.t) : 
-  JLeakage.leakage * BArray512.t * BArray196608.t * BArray32.t = {
+  JLeakage.leakage * BArray512.t * BArray196608.t * BArray32.t * W8.t = {
     var _b:JLeakage.leakages;
     var leak:JLeakage.leakages;
     var leak_0:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
     var leak_cond:JLeakage.leakages;
+    var overflow:W8.t;
     var res_0:BArray48.t;
     var res_p:BArray48.t;
     var j:W64.t;
@@ -837,6 +881,7 @@ module M(SC:Syscall_t) = {
     var new_pos:W64.t;
     var root_node:BArray1536.t;
     var tr:W8.t;
+    var this_overflow:W8.t;
     var  _0:W64.t;
     var  _1:W64.t;
     res_0 <- witness;
@@ -851,6 +896,8 @@ module M(SC:Syscall_t) = {
     (* Erased call to unspill *)
     (* Erased call to unspill *)
     (* Erased call to spill *)
+    (* Erased call to spill *)
+    overflow <- (W8.of_int 0);
     (* Erased call to spill *)
     j <- (W64.of_int 0);
     leak_cond <- [];
@@ -902,23 +949,29 @@ module M(SC:Syscall_t) = {
     (* Erased call to spill *)
     res_p <- res_p;
     tr <- (W8.of_int 1);
-    (leak_c, root_node) <@ addToNode (root_node, res_p, tr);
+    (leak_c, root_node, this_overflow) <@ addToNode (root_node, res_p, tr);
     leak <- (leak ++ [leak_c]);
     (* Erased call to unspill *)
+    overflow <- (overflow `|` this_overflow);
+    (* Erased call to unspill *)
+    (* Erased call to spill *)
     leak <- (leak ++ [(LeakList [(Leak_int (32 * (2 + 4)))])]);
     oram <- (SBArray196608_1536.set_sub64 oram (32 * (2 + 4)) root_node);
-    (leak_c, oram) <@ pushDown (oram);
+    (leak_c, oram, this_overflow) <@ pushDown (oram);
     leak <- (leak ++ [leak_c]);
     (* Erased call to unspill *)
+    overflow <- (overflow `|` this_overflow);
     (* Erased call to unspill *)
-    return ((LeakList leak), pos, oram, ans);
+    (* Erased call to unspill *)
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
   proc read_write_block_export (pos:BArray512.t, oram:BArray196608.t,
                                 ans:BArray32.t, i:W64.t, vals:BArray32.t,
                                 wr:W8.t) : JLeakage.leakage * BArray512.t *
-                                           BArray196608.t * BArray32.t = {
+                                           BArray196608.t * BArray32.t * W8.t = {
     var leak:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
+    var overflow:W8.t;
     leak <- [];
     pos <- pos;
     oram <- oram;
@@ -926,31 +979,36 @@ module M(SC:Syscall_t) = {
     i <- i;
     vals <- vals;
     wr <- wr;
-    (leak_c, pos, oram, ans) <@ read_write_block (pos, oram, ans, i, 
-    vals, wr);
+    (leak_c, pos, oram, ans, overflow) <@ read_write_block (pos, oram, 
+    ans, i, vals, wr);
     leak <- (leak ++ [leak_c]);
     pos <- pos;
     oram <- oram;
     ans <- ans;
-    return ((LeakList leak), pos, oram, ans);
+    overflow <- overflow;
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
   proc multiQuery (pos:BArray512.t, oram:BArray196608.t,
                    queries:BArray2400.t, ans:BArray800.t) : JLeakage.leakage *
                                                             BArray512.t *
                                                             BArray196608.t *
-                                                            BArray800.t = {
+                                                            BArray800.t *
+                                                            W8.t = {
     var _b:JLeakage.leakages;
     var leak:JLeakage.leakages;
     var leak_0:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
     var leak_cond:JLeakage.leakages;
+    var overflow:W8.t;
     var q:W64.t;
     var q3:W64.t;
     var t:W64.t;
     var i:W64.t;
     var v:W64.t;
     var a:W64.t;
+    var this_overflow:W8.t;
     leak <- [];
+    overflow <- (W8.of_int 0);
     q <- (W64.of_int 0);
     leak_cond <- [];
     _b <- [];
@@ -959,6 +1017,7 @@ module M(SC:Syscall_t) = {
     while ((q \ult (W64.of_int 100))) {
       leak_0 <- [];
       q3 <- q;
+      (* Erased call to spill *)
       (* Erased call to spill *)
       (* Erased call to spill *)
       q3 <- (q3 * (W64.of_int 3));
@@ -973,8 +1032,11 @@ module M(SC:Syscall_t) = {
       [(LeakList [(Leak_int (W64.to_uint (q3 + (W64.of_int 2))))])]);
       v <- (BArray2400.get64 queries (W64.to_uint (q3 + (W64.of_int 2))));
       (* Erased call to spill *)
-      (leak_c, pos, oram, a) <@ read_write (pos, oram, i, v, (truncateu8 t));
+      (leak_c, pos, oram, a, this_overflow) <@ read_write (pos, oram, 
+      i, v, (truncateu8 t));
       leak_0 <- (leak_0 ++ [leak_c]);
+      (* Erased call to unspill *)
+      overflow <- (overflow `|` this_overflow);
       (* Erased call to unspill *)
       (* Erased call to unspill *)
       (* Erased call to unspill *)
@@ -986,37 +1048,44 @@ module M(SC:Syscall_t) = {
       (leak_cond ++ [(LeakList [(Leak_bool (q \ult (W64.of_int 100)))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
-    return ((LeakList leak), pos, oram, ans);
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
   proc multiQuery_export (pos:BArray512.t, oram:BArray196608.t,
                           ans:BArray800.t, queries:BArray2400.t) : JLeakage.leakage *
                                                                    BArray512.t *
                                                                    BArray196608.t *
-                                                                   BArray800.t = {
+                                                                   BArray800.t *
+                                                                   W8.t = {
     var leak:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
+    var overflow:W8.t;
     leak <- [];
     pos <- pos;
     oram <- oram;
     ans <- ans;
     queries <- queries;
-    (leak_c, pos, oram, ans) <@ multiQuery (pos, oram, queries, ans);
+    overflow <- (W8.of_int 0);
+    (leak_c, pos, oram, ans, overflow) <@ multiQuery (pos, oram, queries,
+    ans);
     leak <- (leak ++ [leak_c]);
     pos <- pos;
     oram <- oram;
     ans <- ans;
-    return ((LeakList leak), pos, oram, ans);
+    overflow <- overflow;
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
   proc multiQuery_blocks (pos:BArray512.t, oram:BArray196608.t,
                           queries:BArray4800.t, ans:BArray3200.t) : JLeakage.leakage *
                                                                     BArray512.t *
                                                                     BArray196608.t *
-                                                                    BArray3200.t = {
+                                                                    BArray3200.t *
+                                                                    W8.t = {
     var _b:JLeakage.leakages;
     var leak:JLeakage.leakages;
     var leak_0:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
     var leak_cond:JLeakage.leakages;
+    var overflow:W8.t;
     var q:W64.t;
     var q2b_sz:W64.t;
     var t:W64.t;
@@ -1024,9 +1093,11 @@ module M(SC:Syscall_t) = {
     var vals:BArray32.t;
     var qb_sz:W64.t;
     var this_ans:BArray32.t;
+    var this_overflow:W8.t;
     this_ans <- witness;
     vals <- witness;
     leak <- [];
+    overflow <- (W8.of_int 0);
     q <- (W64.of_int 0);
     leak_cond <- [];
     _b <- [];
@@ -1035,6 +1106,7 @@ module M(SC:Syscall_t) = {
     while ((q \ult (W64.of_int 100))) {
       leak_0 <- [];
       q2b_sz <- q;
+      (* Erased call to spill *)
       (* Erased call to spill *)
       (* Erased call to spill *)
       q2b_sz <- (q2b_sz * (W64.of_int ((1 + 1) + 4)));
@@ -1057,9 +1129,11 @@ module M(SC:Syscall_t) = {
       this_ans <- (SBArray3200_32.get_sub64 ans (W64.to_uint qb_sz));
       (* Erased call to spill *)
       (* Erased call to spill *)
-      (leak_c, pos, oram, this_ans) <@ read_write_block (pos, oram, this_ans,
-      i, vals, (truncateu8 t));
+      (leak_c, pos, oram, this_ans, this_overflow) <@ read_write_block (
+      pos, oram, this_ans, i, vals, (truncateu8 t));
       leak_0 <- (leak_0 ++ [leak_c]);
+      (* Erased call to unspill *)
+      overflow <- (overflow `|` this_overflow);
       (* Erased call to unspill *)
       (* Erased call to unspill *)
       (* Erased call to unspill *)
@@ -1072,23 +1146,27 @@ module M(SC:Syscall_t) = {
       (leak_cond ++ [(LeakList [(Leak_bool (q \ult (W64.of_int 100)))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
-    return ((LeakList leak), pos, oram, ans);
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
   proc multiQuery_blocks_export (pos:BArray512.t, oram:BArray196608.t,
                                  ans:BArray3200.t, queries:BArray4800.t) : 
-  JLeakage.leakage * BArray512.t * BArray196608.t * BArray3200.t = {
+  JLeakage.leakage * BArray512.t * BArray196608.t * BArray3200.t * W8.t = {
     var leak:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
+    var overflow:W8.t;
     leak <- [];
     pos <- pos;
     oram <- oram;
     queries <- queries;
     ans <- ans;
-    (leak_c, pos, oram, ans) <@ multiQuery_blocks (pos, oram, queries, ans);
+    overflow <- (W8.of_int 0);
+    (leak_c, pos, oram, ans, overflow) <@ multiQuery_blocks (pos, oram,
+    queries, ans);
     leak <- (leak ++ [leak_c]);
     pos <- pos;
     oram <- oram;
     ans <- ans;
-    return ((LeakList leak), pos, oram, ans);
+    overflow <- overflow;
+    return ((LeakList leak), pos, oram, ans, overflow);
   }
 }.

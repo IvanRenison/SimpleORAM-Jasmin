@@ -100,9 +100,10 @@ inline fn isDesOf(reg u64 j0, reg u64 j1) -> reg u8 { // Is j1 a descendent of j
 }
 
 /* If real, add {i, pos, vals} to node, assuming that there is a free node element
-   else make all the reads and writes with out doing nothing
+   else make all the reads and writes with out doing nothing. Return true if there was no space (overflow).
 */
-fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem, reg u8 real) -> reg ptr u64[K * (2 + b_sz)] {
+fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem, reg u8 real)
+    -> reg ptr u64[K * (2 + b_sz)], reg u8 {
 
   reg u64 i = nodeElem[0];
   reg u64 pos = nodeElem[1];
@@ -158,13 +159,17 @@ fn addToNode(reg ptr u64[K * (2 + b_sz)] node, reg ptr u64[2 + b_sz] nodeElem, r
     k = k + 1;
   }
 
-  return node;
+  reg u8 overflow = flag;
+  overflow = !overflow;
+
+  return node, overflow;
 }
 
 /*
   Find node element corresponding to block i and store it in res. Removes from original and returns original index in oram in form (j, k)
 */
-fn fetch(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
+fn fetch(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[2 + b_sz] res, reg u64 i)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[2 + b_sz], reg u64, reg u64 {
 
   reg u64 ans_j = 0;
   reg u64 ans_k = 0;
@@ -238,7 +243,8 @@ fn fetch(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, r
 }
 
 export
-fn fetch_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg ptr u64[2 + b_sz] res, #secret reg u64 i) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], #secret reg ptr u64[2 + b_sz], #secret reg u64, #secret reg u64 {
+fn fetch_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg ptr u64[2 + b_sz] res, #secret reg u64 i)
+    -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], #secret reg ptr u64[2 + b_sz], #secret reg u64, #secret reg u64 {
   Pos = Pos; oram = oram; res = res; i = i;
   reg u64 ans_j, ans_k;
   Pos, oram, res, ans_j, ans_k = fetch(Pos, oram, res, i);
@@ -247,7 +253,11 @@ fn fetch_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 +
   return Pos, oram, res, ans_j, ans_k;
 }
 
-fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K * (2 + b_sz)] {
+/*
+  Make a push down and return true iff there was an overflow
+*/
+fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram)
+    -> reg ptr u64[2 * N * K * (2 + b_sz)], reg u8 {
   reg u64 N_reg = N;
   reg u64 ix0 = random(N_reg);
 
@@ -264,6 +274,8 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
 
     k += 1;
   }
+
+  reg u8 overflow = 0;
 
   while (l > 0) {
     l = l - 1;
@@ -285,6 +297,7 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
       reg u64 ik = k * (2 + b_sz);
 
       () = #spill(k);
+      () = #spill(overflow);
 
       reg u64 i = toAdd[ik];
       reg bool b_cond = i != N;
@@ -292,9 +305,15 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
 
       reg ptr u64[2 + b_sz] this_nodeElem_toAdd = toAdd[ik: 2 + b_sz];
 
+      reg u8 this_overflow;
+
       node = node;
-      node = addToNode(node, this_nodeElem_toAdd, cond);
+      node, this_overflow = addToNode(node, this_nodeElem_toAdd, cond);
       node = node;
+
+      () = #unspill(overflow);
+
+      overflow = overflow | this_overflow;
 
       toAdd[ik] = N;
 
@@ -322,6 +341,7 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
       while (k < K) { // Add elements to toAdd
         reg u64 ik = k * (2 + b_sz);
         () = #spill(k);
+        () = #spill(overflow);
 
         reg u64 this_i = node[ik];
         reg u64 this_pos = node[ik + 1];
@@ -338,7 +358,12 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
         reg u8 cond = #SETcc(cond_b);
         cond = cond & isDes;
 
-        toAdd = addToNode(toAdd, this_nodeElem, cond);
+        reg u8 this_overflow;
+
+        toAdd, this_overflow = addToNode(toAdd, this_nodeElem, cond);
+        () = #unspill(overflow);
+        overflow = overflow | this_overflow;
+
         reg u64 new_i = this_i;
         cond_b = cond == 1;
         reg u64 N_reg = N;
@@ -360,20 +385,24 @@ fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> reg ptr u64[2 * N * K *
     oram[pi: K * (2 + b_sz)] = node;
   }
 
-  return oram;
+  return oram, overflow;
 }
 
 export
-fn pushDown_export(#secret reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
+fn pushDown_export(#secret reg ptr u64[2 * N * K * (2 + b_sz)] oram)
+    -> #secret reg ptr u64[2 * N * K * (2 + b_sz)], reg u8 {
   oram = oram;
-  oram = pushDown(oram);
-  return oram;
+  reg u8 overflow;
+  oram, overflow = pushDown(oram);
+  overflow = overflow;
+  return oram, overflow;
 }
 
 /*
-Initialize a one level ORAM
+Initialize a one level ORAM. Return true iff there was an overflow
 */
-fn initORAM(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
+fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u8 {
   reg u64 N2K = N * 2 * K;
 
   reg u64 ix = 0;
@@ -383,8 +412,11 @@ fn initORAM(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
     ix += 1;
   }
 
+  reg u8 overflow = 0;
+
   reg u64 i = 0;
   while (i < N) {
+    () = #spill(overflow);
     reg u64 N_reg = N;
     reg u64 pos = random(N_reg);
     pos = pos;
@@ -406,15 +438,21 @@ fn initORAM(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
     () = #spill(Pos);
     () = #spill(oram);
 
+    reg u8 this_overflow;
     reg u8 tr = 1;
-    root_node = addToNode(root_node, nodeElem, tr);
+    root_node, this_overflow = addToNode(root_node, nodeElem, tr);
+    () = #unspill(overflow);
+    overflow = overflow | this_overflow;
 
+    () = #spill(overflow);
     () = #unspill(oram);
 
     oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
 
 
-    oram = pushDown(oram);
+    oram, this_overflow = pushDown(oram);
+    () = #unspill(overflow);
+    overflow = overflow | this_overflow;
 
     () = #unspill(Pos);
     () = #unspill(i);
@@ -422,18 +460,22 @@ fn initORAM(#public reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
     i += 1;
   }
 
-  return Pos, oram;
+  return Pos, oram, overflow;
 }
 
 export
-fn initORAM_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)] {
+fn initORAM_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram)
+    -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], reg u8 {
   Pos = Pos; oram = oram;
-  Pos, oram = initORAM(Pos, oram);
-  return Pos, oram;
+  reg u8 overflow;
+  Pos, oram, overflow = initORAM(Pos, oram);
+  overflow = overflow;
+  return Pos, oram, overflow;
 }
 
-// Read and optionally write (write only if wr)
-fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in, reg u64 v, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
+// Read and optionally write (write only if wr). Return the read value and true iff there was an overflow
+fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg u64 in, reg u64 v, reg u8 wr)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg u64, reg u8 {
   reg u64 i = in;
   i = i >> log_b_sz; // i /= b_sz
   i = i;
@@ -447,6 +489,7 @@ fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
   () = #spill(v);
   () = #spill(wr);
 
+
   Pos, oram, res_p, _, _ = fetch(Pos, oram, res_p, i);
 
   () = #unspill(wr);
@@ -454,6 +497,9 @@ fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
   () = #unspill(v);
   () = #spill(oram);
   () = #spill(Pos);
+
+  reg u8 overflow = 0;
+  () = #spill(overflow);
 
   reg u64 ans;
   reg u64 ji = 0;
@@ -495,31 +541,38 @@ fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
 
   res_p = res_p;
   reg u8 tr = 1;
-  root_node = addToNode(root_node, res_p, tr);
+  reg u8 this_overflow;
+  root_node, this_overflow = addToNode(root_node, res_p, tr);
+  () = #unspill(overflow);
+  overflow = overflow | this_overflow;
+  () = #spill(overflow);
 
   () = #unspill(oram);
 
   oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
 
-  oram = pushDown(oram);
-
+  oram, this_overflow = pushDown(oram);
+  () = #unspill(overflow);
   () = #unspill(Pos);
   () = #unspill(ans);
 
-  return Pos, oram, ans;
+  return Pos, oram, ans, overflow;
 }
 
 export
-fn read_write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg u64 in, #secret reg u64 v, #secret reg u8 wr) -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], reg u64 {
+fn read_write_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg u64 in, #secret reg u64 v, #secret reg u8 wr)
+    -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], reg u64, reg u8 {
   Pos = Pos; oram = oram; in = in; v = v; wr = wr;
   reg u64 ans;
-  Pos, oram, ans = read_write(Pos, oram, in, v, wr);
-  Pos = Pos; oram = oram; ans = ans;
-  return Pos, oram, ans;
+  reg u8 overflow;
+  Pos, oram, ans, overflow = read_write(Pos, oram, in, v, wr);
+  Pos = Pos; oram = oram; ans = ans; overflow = overflow;
+  return Pos, oram, ans, overflow;
 }
 
-// Read and optionally write a complete block (write only if wr)
-fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vals, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
+// Read and optionally write a complete block (write only if wr). Return true iff there was an overflow
+fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vals, reg u8 wr)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz], reg u8 {
   stack u64[2 + b_sz] res;
   reg ptr u64[2 + b_sz] res_p = res;
 
@@ -532,6 +585,9 @@ fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
   () = #unspill(vals);
   () = #spill(oram);
   () = #spill(Pos);
+
+  reg u8 overflow = 0;
+  () = #spill(overflow);
 
   reg u64 j = 0;
   while (j < b_sz) {
@@ -570,34 +626,47 @@ fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
 
   res_p = res_p;
   reg u8 tr = 1;
-  root_node = addToNode(root_node, res_p, tr);
+  reg u8 this_overflow;
+  root_node, this_overflow = addToNode(root_node, res_p, tr);
+  () = #unspill(overflow);
+  overflow = overflow | this_overflow;
 
   () = #unspill(oram);
+  () = #spill(overflow);
 
   oram[K * (2 + b_sz): K * (2 + b_sz)] = root_node;
 
-  oram = pushDown(oram);
+  oram, this_overflow = pushDown(oram);
+  () = #unspill(overflow);
+  overflow = overflow | this_overflow;
 
   () = #unspill(Pos);
   () = #unspill(ans);
 
-  return Pos, oram, ans;
+  return Pos, oram, ans, overflow;
 }
 
 export
-fn read_write_block_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vals, reg u8 wr) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz] {
+fn read_write_block_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vals, reg u8 wr)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz], reg u8 {
   Pos = Pos; oram = oram; ans = ans; i = i; vals = vals; wr = wr;
-  Pos, oram, ans = read_write_block(Pos, oram, ans, i, vals, wr);
-  Pos = Pos; oram = oram; ans = ans;
-  return Pos, oram, ans;
+  reg u8 overflow;
+  Pos, oram, ans, overflow = read_write_block(Pos, oram, ans, i, vals, wr);
+  Pos = Pos; oram = oram; ans = ans; overflow = overflow;
+  return Pos, oram, ans, overflow;
 }
 
-fn multiQuery(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * (1 + 1 + 1)] queries, reg ptr u64 [N_queries] ans) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries] {
+// Make multiple queries. Return true iff there was an overflow
+fn multiQuery(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * (1 + 1 + 1)] queries, reg ptr u64 [N_queries] ans)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries], reg u8 {
+
+  reg u8 overflow = 0;
 
   reg u64 q = 0;
   while (q < N_queries) {
     reg u64 q3 = q;
 
+    () = #spill(overflow);
     () = #spill(q);
     () = #spill(ans);
 
@@ -610,8 +679,10 @@ fn multiQuery(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
 
 
     reg u64 a;
-
-    Pos, oram, a = read_write(Pos, oram, i, v, t);
+    reg u8 this_overflow;
+    Pos, oram, a, this_overflow = read_write(Pos, oram, i, v, t);
+    () = #unspill(overflow);
+    overflow = overflow | this_overflow;
 
     () = #unspill(queries);
     () = #unspill(ans);
@@ -622,23 +693,30 @@ fn multiQuery(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
     q += 1;
   }
 
-  return Pos, oram, ans;
+  return Pos, oram, ans, overflow;
 }
 
 export
-fn multiQuery_export(#public reg ptr u64[N] Pos, #private reg ptr u64[2 * N * K * (2 + b_sz)] oram, #private reg ptr u64 [N_queries] ans, #private reg ptr u64 [N_queries * (1 + 1 + 1)] queries) -> #public reg ptr u64[N], #private reg ptr u64[2 * N * K * (2 + b_sz)], #private reg ptr u64 [N_queries] {
+fn multiQuery_export(#public reg ptr u64[N] Pos, #private reg ptr u64[2 * N * K * (2 + b_sz)] oram, #private reg ptr u64 [N_queries] ans, #private reg ptr u64 [N_queries * (1 + 1 + 1)] queries)
+    -> #public reg ptr u64[N], #private reg ptr u64[2 * N * K * (2 + b_sz)], #private reg ptr u64 [N_queries], reg u8 {
   Pos = Pos; oram = oram; ans = ans; queries = queries;
-  Pos, oram, ans = multiQuery(Pos, oram, queries, ans);
-  Pos = Pos; oram = oram; ans = ans;
-  return Pos, oram, ans;
+  reg u8 overflow = 0;
+  Pos, oram, ans, overflow = multiQuery(Pos, oram, queries, ans);
+  Pos = Pos; oram = oram; ans = ans; overflow = overflow;
+  return Pos, oram, ans, overflow;
 }
 
-fn multiQuery_blocks(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * (1 + 1 + b_sz)] queries, reg ptr u64 [N_queries * b_sz] ans) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries * b_sz] {
+// Make multiple block queries. Return true iff there was an overflow
+fn multiQuery_blocks(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * (1 + 1 + b_sz)] queries, reg ptr u64 [N_queries * b_sz] ans)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries * b_sz], reg u8 {
+
+  reg u8 overflow = 0;
 
   reg u64 q = 0;
   while (q < N_queries) {
     reg u64 q2b_sz = q;
 
+    () = #spill(overflow);
     () = #spill(q);
     () = #spill(ans);
 
@@ -655,8 +733,10 @@ fn multiQuery_blocks(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] ora
 
 
     reg u64 a;
-
-    Pos, oram, this_ans = read_write_block(Pos, oram, this_ans, i, vals, t);
+    reg u8 this_overflow;
+    Pos, oram, this_ans, this_overflow = read_write_block(Pos, oram, this_ans, i, vals, t);
+    () = #unspill(overflow);
+    overflow = overflow | this_overflow;
 
     () = #unspill(qb_sz);
     () = #unspill(queries);
@@ -668,14 +748,16 @@ fn multiQuery_blocks(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] ora
     q += 1;
   }
 
-  return Pos, oram, ans;
+  return Pos, oram, ans, overflow;
 }
 
 export
-fn multiQuery_blocks_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * b_sz] ans, reg ptr u64 [N_queries * (1 + 1 + b_sz)] queries) -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries * b_sz] {
+fn multiQuery_blocks_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * b_sz] ans, reg ptr u64 [N_queries * (1 + 1 + b_sz)] queries)
+    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries * b_sz], reg u8 {
   Pos = Pos; oram = oram; queries = queries; ans = ans;
-  Pos, oram, ans = multiQuery_blocks(Pos, oram, queries, ans);
-  Pos = Pos; oram = oram; ans = ans;
-  return Pos, oram, ans;
+  reg u8 overflow = 0;
+  Pos, oram, ans, overflow = multiQuery_blocks(Pos, oram, queries, ans);
+  Pos = Pos; oram = oram; ans = ans; overflow = overflow;
+  return Pos, oram, ans, overflow;
 }
 
