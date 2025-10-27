@@ -2,6 +2,7 @@ require import AllCore IntDiv CoreMap List Distr.
 
 require import Oram.
 require import SimpleORAM.
+require import SimpleORAMExtra.
 require import SBArray48_32.
 require import SBArray1536_48.
 require import SBArray3200_32.
@@ -13,7 +14,6 @@ from Jasmin require import JModel_x86.
 
 module Jasmin = M(Syscall).
 
-print SBArray48_32.get_sub64.
 
 op n : int = 256.
 op K : int = 32.
@@ -48,7 +48,7 @@ op eq_pos_path (pos : W64.t) (p : EC_Model.path) : bool =
 
 op pos_to_path (pos : W64.t) : EC_Model.path = EC_Model.int2path (W64.to_uint pos).
 op path_to_pos (p : EC_Model.path) : W64.t = W64.of_int (EC_Model.path2int p).
-  
+
 op eq_NodeElem_tuple (nodeElem : NodeElem) (b : EC_Model.tuple) : bool =
   NodeElem_i nodeElem = b.`1
     /\ eq_pos_path (NodeElem_pos nodeElem) b.`2
@@ -59,13 +59,13 @@ op NodeElem_to_tuple (nodeElem : NodeElem) : EC_Model.tuple =
 
 op Node_to_NodeElemlist (node : Node) : NodeElem list =
   mkseq (fun i => (SBArray1536_48.get_sub64 node (i * 48))) K.
-  
+
 op Node_to_tuplelist (node : Node) : EC_Model.tuple list =
   map NodeElem_to_tuple
     (filter (fun nodeElem => W64.to_uint (NodeElem_i nodeElem) < N)
        (Node_to_NodeElemlist node)
     ).
-  
+
 op eq_Node_tuplelist (node : Node) (b : EC_Model.tuple list) : bool =
   perm_eq (Node_to_tuplelist node) b.
 
@@ -79,7 +79,6 @@ op eq_Pos_positions (Pos : PosArray) (positions : W64.t -> EC_Model.path) : bool
   forall (i : int), 0 <= i < N =>
     eq_pos_path (BArray512.get64 Pos i) (positions (W64.of_int i)).
 
-print EC_Model.oram.
 
 op eq_PosORAM_oram (Pos_joram : PosArray_ORAM) (or : EC_Model.oram) : bool =
   6 = or.`EC_Model.height
@@ -114,6 +113,9 @@ op eq_BlockMultiQueryAns_valuelist (ans : BlockMultiQueryAns) (os : BArray32.t l
   forall (q : int), 0 <= q < N_queries =>
     SBArray3200_32.get_sub64 ans q = nth witness os q.
 
+
+op leakagelist_to_JLeakage (ecleak : EC_Model.leakage list) : JLeakage.leakage.
+
 op eq_JLeakage_leakagelist (jleak : JLeakage.leakage) (ecleak : EC_Model.leakage list) : bool. (* TODO *)
 
 
@@ -126,6 +128,25 @@ lemma functional_correctness :
         eq_JLeakage_leakagelist res{1}.`1 EC_Model.ORAM.leakage{2}
         /\ eq_BlockMultiQueryAns_valuelist res{1}.`4 res{2}.`2
   ].
+admitted.
+
+lemma security_dep :
+  equiv[
+    Jasmin.multiQuery_blocks ~ EC_Model.ORAM.compile :
+      true ==> res{1}.`1 = leakagelist_to_JLeakage(EC_Model.ORAM.leakage{2})
+  ].
+admitted.
+
+
+lemma Jasmin_security :
+  equiv[
+    Jasmin.multiQuery_blocks ~ Jasmin.multiQuery_blocks :
+      true ==> res{1}.`1 = res{2}.`1
+  ].
+proof.
+  
+admitted.
+
 
 
 

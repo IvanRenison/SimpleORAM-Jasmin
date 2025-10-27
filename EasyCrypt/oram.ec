@@ -29,61 +29,76 @@ module M(SC:Syscall_t) = {
     var aux:BArray8.t;
     var leak:JLeakage.leakages;
     var r:W64.t;
-    var buf:BArray8.t;
-    var r2:W64.t;
-    buf <- witness;
+    var buf0:BArray8.t;
+    var r0:W64.t;
+    var buf0_0:BArray8.t;
+    var buf0_1:BArray8.t;
+    var buf0_2:BArray8.t;
+    var buf0_3:BArray8.t;
+    var buf0_4:BArray8.t;
+    var buf0_5:BArray8.t;
+    buf0 <- witness;
+    buf0_0 <- witness;
+    buf0_1 <- witness;
+    buf0_2 <- witness;
+    buf0_3 <- witness;
+    buf0_4 <- witness;
+    buf0_5 <- witness;
     leak <- [];
-    aux <@ SC.randombytes_8 (buf);
-    buf <- aux;
+    aux <@ SC.randombytes_8 (buf0);
+    buf0 <- aux;
     leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
-    r <- (BArray8.get64 buf 0);
-    aux <@ SC.randombytes_8 (buf);
-    buf <- aux;
+    r0 <- (BArray8.get64 buf0 0);
+    r <- r0;
+    aux <@ SC.randombytes_8 (buf0_0);
+    buf0_0 <- aux;
     leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
-    r2 <- (BArray8.get64 buf 0);
-    r2 <- (r2 `<<` (W8.of_int 8));
-    r <- (r `|` r2);
-    aux <@ SC.randombytes_8 (buf);
-    buf <- aux;
+    r0 <- (BArray8.get64 buf0_0 0);
+    r0 <- (r0 `<<` (W8.of_int 8));
+    r <- (r `|` r0);
+    aux <@ SC.randombytes_8 (buf0_1);
+    buf0_1 <- aux;
     leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
-    r2 <- (BArray8.get64 buf 0);
-    r2 <- (r2 `<<` (W8.of_int 16));
-    r <- (r `|` r2);
-    aux <@ SC.randombytes_8 (buf);
-    buf <- aux;
+    r0 <- (BArray8.get64 buf0_1 0);
+    r0 <- (r0 `<<` (W8.of_int 16));
+    r <- (r `|` r0);
+    aux <@ SC.randombytes_8 (buf0_2);
+    buf0_2 <- aux;
     leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
-    r2 <- (BArray8.get64 buf 0);
-    r2 <- (r2 `<<` (W8.of_int 24));
-    r <- (r `|` r2);
-    aux <@ SC.randombytes_8 (buf);
-    buf <- aux;
+    r0 <- (BArray8.get64 buf0_2 0);
+    r0 <- (r0 `<<` (W8.of_int 24));
+    r <- (r `|` r0);
+    aux <@ SC.randombytes_8 (buf0_3);
+    buf0_3 <- aux;
     leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
-    r2 <- (BArray8.get64 buf 0);
-    r2 <- (r2 `<<` (W8.of_int 32));
-    r <- (r `|` r2);
-    aux <@ SC.randombytes_8 (buf);
-    buf <- aux;
+    r0 <- (BArray8.get64 buf0_3 0);
+    r0 <- (r0 `<<` (W8.of_int 32));
+    r <- (r `|` r0);
+    aux <@ SC.randombytes_8 (buf0_4);
+    buf0_4 <- aux;
     leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
-    r2 <- (BArray8.get64 buf 0);
-    r2 <- (r2 `<<` (W8.of_int 40));
-    r <- (r `|` r2);
-    aux <@ SC.randombytes_8 (buf);
-    buf <- aux;
+    r0 <- (BArray8.get64 buf0_4 0);
+    r0 <- (r0 `<<` (W8.of_int 40));
+    r <- (r `|` r0);
+    aux <@ SC.randombytes_8 (buf0_5);
+    buf0_5 <- aux;
     leak <- (leak ++ [(LeakList [(Leak_int 0)])]);
-    r2 <- (BArray8.get64 buf 0);
-    r2 <- (r2 `<<` (W8.of_int 48));
-    r <- (r `|` r2);
+    r0 <- (BArray8.get64 buf0_5 0);
+    r0 <- (r0 `<<` (W8.of_int 48));
+    r <- (r `|` r0);
     return ((LeakList leak), r);
   }
-  proc random (x:W64.t) : JLeakage.leakage * W64.t = {
+  proc random () : JLeakage.leakage * W64.t = {
     var leak:JLeakage.leakages;
     var leak_c:JLeakage.leakage;
     var ans:W64.t;
+    var p_N:W64.t;
     leak <- [];
     (leak_c, ans) <@ randombyte ();
     leak <- (leak ++ [leak_c]);
     ans <- ans;
-    ans <- (ans \umod x);
+    p_N <- (W64.of_int ((256 %/ 4) - 1));
+    ans <- (ans `&` p_N);
     return ((LeakList leak), ans);
   }
   proc bSR (x:W64.t) : JLeakage.leakage * W64.t = {
@@ -178,7 +193,7 @@ module M(SC:Syscall_t) = {
       (* Erased call to spill *)
       leak_0 <- (leak_0 ++ [(LeakList [(Leak_int 0)])]);
       this_i <- (BArray48.get64 this_nodeElem 0);
-      b_cond <- (this_i = (W64.of_int (((256 + 4) - 1) %/ 4)));
+      b_cond <- (this_i = (W64.of_int (256 %/ 4)));
       cond <- (SETcc b_cond);
       cond <- (cond `&` flag);
       cond <- (cond `&` real);
@@ -279,7 +294,7 @@ module M(SC:Syscall_t) = {
     i <- i;
     leak <- (leak ++ [(LeakList [(Leak_int (W64.to_uint i))])]);
     ix <- (BArray512.get64 pos (W64.to_uint i));
-    ix <- (ix + (W64.of_int (((256 + 4) - 1) %/ 4)));
+    ix <- (ix + (W64.of_int (256 %/ 4)));
     leak_cond <- [];
     _b <- [];
     leak_cond <-
@@ -339,7 +354,7 @@ module M(SC:Syscall_t) = {
         (leak_1 ++ [(LeakList [(LeakList leak_cond_1); (LeakList _b_1)])]);
         cond_b <- (this_i = i);
         new_i <- this_i;
-        n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
+        n_reg <- (W64.of_int (256 %/ 4));
         new_i <- (cond_b ? n_reg : new_i);
         leak_1 <- (leak_1 ++ [(LeakList [(Leak_int 0)])]);
         nodeElem <- (BArray48.set64 nodeElem 0 new_i);
@@ -393,7 +408,6 @@ module M(SC:Syscall_t) = {
     var leak_cond:JLeakage.leakages;
     var leak_cond_0:JLeakage.leakages;
     var overflow:W8.t;
-    var n_reg:W64.t;
     var ix0:W64.t;
     var l:W64.t;
     var k:W64.t;
@@ -421,16 +435,15 @@ module M(SC:Syscall_t) = {
     var cond_0:W8.t;
     var this_overflow_0:W8.t;
     var new_i:W64.t;
-    var n_reg_0:W64.t;
+    var n_reg:W64.t;
     node <- witness;
     this_nodeElem <- witness;
     this_nodeElem_toAdd <- witness;
     toAdd <- witness;
     leak <- [];
-    n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
-    (leak_c, ix0) <@ random (n_reg);
+    (leak_c, ix0) <@ random ();
     leak <- (leak ++ [leak_c]);
-    ix0 <- (ix0 + (W64.of_int (((256 + 4) - 1) %/ 4)));
+    ix0 <- (ix0 + (W64.of_int (256 %/ 4)));
     (leak_c, l) <@ bSR (ix0);
     leak <- (leak ++ [leak_c]);
     l <- (l + (W64.of_int 1));
@@ -444,8 +457,7 @@ module M(SC:Syscall_t) = {
       ik <- (k * (W64.of_int (2 + 4)));
       leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint ik))])]);
       toAdd <-
-      (BArray1536.set64 toAdd (W64.to_uint ik)
-      (W64.of_int (((256 + 4) - 1) %/ 4)));
+      (BArray1536.set64 toAdd (W64.to_uint ik) (W64.of_int (256 %/ 4)));
       k <- (k + (W64.of_int 1));
       _b <- (_b ++ [(LeakList leak_0)]);
       leak_cond <-
@@ -480,7 +492,7 @@ module M(SC:Syscall_t) = {
         (* Erased call to spill *)
         leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
         i <- (BArray1536.get64 toAdd (W64.to_uint ik_0));
-        b_cond <- (i <> (W64.of_int (((256 + 4) - 1) %/ 4)));
+        b_cond <- (i <> (W64.of_int (256 %/ 4)));
         cond <- (SETcc b_cond);
         leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
         this_nodeElem_toAdd <-
@@ -494,8 +506,7 @@ module M(SC:Syscall_t) = {
         overflow <- (overflow `|` this_overflow);
         leak_1 <- (leak_1 ++ [(LeakList [(Leak_int (W64.to_uint ik_0))])]);
         toAdd <-
-        (BArray1536.set64 toAdd (W64.to_uint ik_0)
-        (W64.of_int (((256 + 4) - 1) %/ 4)));
+        (BArray1536.set64 toAdd (W64.to_uint ik_0) (W64.of_int (256 %/ 4)));
         (* Erased call to unspill *)
         k_0 <- (k_0 + (W64.of_int 1));
         _b_0 <- (_b_0 ++ [(LeakList leak_1)]);
@@ -539,10 +550,10 @@ module M(SC:Syscall_t) = {
           (SBArray1536_48.get_sub64 node (W64.to_uint ik_1));
           (* Erased call to spill *)
           this_pos_ix <- this_pos;
-          this_pos_ix <- (this_pos_ix + (W64.of_int (((256 + 4) - 1) %/ 4)));
+          this_pos_ix <- (this_pos_ix + (W64.of_int (256 %/ 4)));
           (leak_c, isDes) <@ isDesOf (next_ix, this_pos_ix);
           leak_2 <- (leak_2 ++ [leak_c]);
-          cond_b <- (this_i <> (W64.of_int (((256 + 4) - 1) %/ 4)));
+          cond_b <- (this_i <> (W64.of_int (256 %/ 4)));
           cond_0 <- (SETcc cond_b);
           cond_0 <- (cond_0 `&` isDes);
           (leak_c, toAdd, this_overflow_0) <@ addToNode (toAdd,
@@ -552,8 +563,8 @@ module M(SC:Syscall_t) = {
           overflow <- (overflow `|` this_overflow_0);
           new_i <- this_i;
           cond_b <- (cond_0 = (W8.of_int 1));
-          n_reg_0 <- (W64.of_int (((256 + 4) - 1) %/ 4));
-          new_i <- (cond_b ? n_reg_0 : new_i);
+          n_reg <- (W64.of_int (256 %/ 4));
+          new_i <- (cond_b ? n_reg : new_i);
           (* Erased call to unspill *)
           leak_2 <- (leak_2 ++ [(LeakList [(Leak_int (W64.to_uint ik_1))])]);
           node <- (BArray1536.set64 node (W64.to_uint ik_1) new_i);
@@ -611,7 +622,6 @@ module M(SC:Syscall_t) = {
     var ix:W64.t;
     var pi:W64.t;
     var i:W64.t;
-    var n_reg:W64.t;
     var pos_0:W64.t;
     var nodeElem_mem:BArray48.t;
     var l:W64.t;
@@ -623,7 +633,7 @@ module M(SC:Syscall_t) = {
     nodeElem_mem <- witness;
     root_node <- witness;
     leak <- [];
-    n2K <- (W64.of_int (((((256 + 4) - 1) %/ 4) * 2) * 32));
+    n2K <- (W64.of_int (((256 %/ 4) * 2) * 32));
     ix <- (W64.of_int 0);
     leak_cond <- [];
     _b <- [];
@@ -633,8 +643,7 @@ module M(SC:Syscall_t) = {
       pi <- (ix * (W64.of_int (2 + 4)));
       leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint pi))])]);
       oram <-
-      (BArray196608.set64 oram (W64.to_uint pi)
-      (W64.of_int (((256 + 4) - 1) %/ 4)));
+      (BArray196608.set64 oram (W64.to_uint pi) (W64.of_int (256 %/ 4)));
       ix <- (ix + (W64.of_int 1));
       _b <- (_b ++ [(LeakList leak_0)]);
       leak_cond <- (leak_cond ++ [(LeakList [(Leak_bool (ix \ult n2K))])]);
@@ -646,12 +655,11 @@ module M(SC:Syscall_t) = {
     _b <- [];
     leak_cond <-
     (leak_cond ++
-    [(LeakList [(Leak_bool (i \ult (W64.of_int (((256 + 4) - 1) %/ 4))))])]);
-    while ((i \ult (W64.of_int (((256 + 4) - 1) %/ 4)))) {
+    [(LeakList [(Leak_bool (i \ult (W64.of_int (256 %/ 4))))])]);
+    while ((i \ult (W64.of_int (256 %/ 4)))) {
       leak_0 <- [];
       (* Erased call to spill *)
-      n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
-      (leak_c, pos_0) <@ random (n_reg);
+      (leak_c, pos_0) <@ random ();
       leak_0 <- (leak_0 ++ [leak_c]);
       pos_0 <- pos_0;
       leak_0 <- (leak_0 ++ [(LeakList [(Leak_int (W64.to_uint i))])]);
@@ -705,7 +713,7 @@ module M(SC:Syscall_t) = {
       _b <- (_b ++ [(LeakList leak_0)]);
       leak_cond <-
       (leak_cond ++
-      [(LeakList [(Leak_bool (i \ult (W64.of_int (((256 + 4) - 1) %/ 4))))])]);
+      [(LeakList [(Leak_bool (i \ult (W64.of_int (256 %/ 4))))])]);
     }
     leak <- (leak ++ [(LeakList [(LeakList leak_cond); (LeakList _b)])]);
     return ((LeakList leak), pos, oram, overflow);
@@ -745,7 +753,6 @@ module M(SC:Syscall_t) = {
     var cond:W8.t;
     var write:W8.t;
     var write_b:bool;
-    var n_reg:W64.t;
     var new_pos:W64.t;
     var root_node:BArray1536.t;
     var tr:W8.t;
@@ -805,8 +812,7 @@ module M(SC:Syscall_t) = {
     (* Erased call to spill *)
     (* Erased call to spill *)
     (* Erased call to spill *)
-    n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
-    (leak_c, new_pos) <@ random (n_reg);
+    (leak_c, new_pos) <@ random ();
     leak <- (leak ++ [leak_c]);
     new_pos <- new_pos;
     (* Erased call to unspill *)
@@ -835,6 +841,7 @@ module M(SC:Syscall_t) = {
     (leak_c, oram, this_overflow) <@ pushDown (oram);
     leak <- (leak ++ [leak_c]);
     (* Erased call to unspill *)
+    overflow <- (overflow `|` this_overflow);
     (* Erased call to unspill *)
     (* Erased call to unspill *)
     return ((LeakList leak), pos, oram, ans, overflow);
@@ -877,7 +884,6 @@ module M(SC:Syscall_t) = {
     var new_v:W64.t;
     var v:W64.t;
     var wr_b:bool;
-    var n_reg:W64.t;
     var new_pos:W64.t;
     var root_node:BArray1536.t;
     var tr:W8.t;
@@ -930,8 +936,7 @@ module M(SC:Syscall_t) = {
     (* Erased call to spill *)
     (* Erased call to spill *)
     (* Erased call to spill *)
-    n_reg <- (W64.of_int (((256 + 4) - 1) %/ 4));
-    (leak_c, new_pos) <@ random (n_reg);
+    (leak_c, new_pos) <@ random ();
     leak <- (leak ++ [leak_c]);
     new_pos <- new_pos;
     (* Erased call to unspill *)
@@ -1064,7 +1069,6 @@ module M(SC:Syscall_t) = {
     oram <- oram;
     ans <- ans;
     queries <- queries;
-    overflow <- (W8.of_int 0);
     (leak_c, pos, oram, ans, overflow) <@ multiQuery (pos, oram, queries,
     ans);
     leak <- (leak ++ [leak_c]);
@@ -1159,7 +1163,6 @@ module M(SC:Syscall_t) = {
     oram <- oram;
     queries <- queries;
     ans <- ans;
-    overflow <- (W8.of_int 0);
     (leak_c, pos, oram, ans, overflow) <@ multiQuery_blocks (pos, oram,
     queries, ans);
     leak <- (leak ++ [leak_c]);

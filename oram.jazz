@@ -5,7 +5,8 @@ param int b_sz = 4;  // Block size
 // assert(b_sz == 1 << log_b_sz)
 param int N_queries = 100; // Amount of queries for multi-query operation
 
-param int N = (n + b_sz - 1) / b_sz; // Amount of blocks
+param int N = n / b_sz; // Amount of blocks
+// assert(n % b_sz == 0)
 
 
 /*
@@ -29,44 +30,59 @@ x    -> a number
 */
 
 
-fn randombyte() -> reg u64 {
-  stack u64[1] buf;
+fn randomu64() -> reg u64 {
   reg u64 r;
-  reg u64 r2;
-  #declassify buf = #randombytes(buf);
-  r = buf[0];
-  #declassify buf = #randombytes(buf);
-  r2 = buf[0];
-  r2 = r2 << 8;
-  r = r | r2;
-  #declassify buf = #randombytes(buf);
-  r2 = buf[0];
-  r2 = r2 << 16;
-  r = r | r2;
-  #declassify buf = #randombytes(buf);
-  r2 = buf[0];
-  r2 = r2 << 24;
-  r = r | r2;
-  #declassify buf = #randombytes(buf);
-  r2 = buf[0];
-  r2 = r2 << 32;
-  r = r | r2;
-  #declassify buf = #randombytes(buf);
-  r2 = buf[0];
-  r2 = r2 << 40;
-  r = r | r2;
-  #declassify buf = #randombytes(buf);
-  r2 = buf[0];
-  r2 = r2 << 48;
-  r = r | r2;
+
+  stack u64[1] buf0;
+  buf0 = #randombytes(buf0);
+  reg u64 r0 = buf0[0];
+  r = r0;
+
+  stack u64[1] buf0;
+  buf0 = #randombytes(buf0);
+  r0 = buf0[0];
+  r0 = r0 << 8;
+  r = r | r0;
+
+  stack u64[1] buf0;
+  buf0 = #randombytes(buf0);
+  r0 = buf0[0];
+  r0 = r0 << 16;
+  r = r | r0;
+
+  stack u64[1] buf0;
+  buf0 = #randombytes(buf0);
+  r0 = buf0[0];
+  r0 = r0 << 24;
+  r = r | r0;
+
+  stack u64[1] buf0;
+  buf0 = #randombytes(buf0);
+  r0 = buf0[0];
+  r0 = r0 << 32;
+  r = r | r0;
+
+  stack u64[1] buf0;
+  buf0 = #randombytes(buf0);
+  r0 = buf0[0];
+  r0 = r0 << 40;
+  r = r | r0;
+
+  stack u64[1] buf0;
+  buf0 = #randombytes(buf0);
+  r0 = buf0[0];
+  r0 = r0 << 48;
+  r = r | r0;
+
   return r;
 }
 
-// Get a random number in [0, x)
-fn random(reg u64 x) -> reg u64 {
-  reg u64 ans = randombyte();
+// Get a random number in [0, N)
+fn random() -> reg u64 {
+  reg u64 ans = randomu64();
   ans = ans;
-  ans = ans % x;
+  reg u64 p_N = N - 1;
+  ans = ans & p_N;
   return ans;
 }
 
@@ -258,8 +274,7 @@ fn fetch_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 +
 */
 fn pushDown(reg ptr u64[2 * N * K * (2 + b_sz)] oram)
     -> reg ptr u64[2 * N * K * (2 + b_sz)], reg u8 {
-  reg u64 N_reg = N;
-  reg u64 ix0 = random(N_reg);
+  #declassify reg u64 ix0 = random();
 
   ix0 += N;
 
@@ -417,9 +432,8 @@ fn initORAM(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram)
   reg u64 i = 0;
   while (i < N) {
     () = #spill(overflow);
-    reg u64 N_reg = N;
-    reg u64 pos = random(N_reg);
-    pos = pos;
+    reg u64 pos = random();
+    #declassify pos = pos;
     Pos[i] = pos;
 
     stack u64[2 + b_sz] nodeElem_mem;
@@ -520,9 +534,8 @@ fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
   () = #spill(res_p);
   () = #spill(i);
 
-  reg u64 N_reg = N;
-  reg u64 new_pos = random(N_reg);
-  new_pos = new_pos;
+  reg u64 new_pos = random();
+  #declassify new_pos = new_pos;
 
   () = #unspill(i);
   () = #unspill(res_p);
@@ -553,6 +566,7 @@ fn read_write(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
 
   oram, this_overflow = pushDown(oram);
   () = #unspill(overflow);
+  overflow = overflow | this_overflow;
   () = #unspill(Pos);
   () = #unspill(ans);
 
@@ -605,9 +619,8 @@ fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
   () = #spill(res_p);
   () = #spill(i);
 
-  reg u64 N_reg = N;
-  reg u64 new_pos = random(N_reg);
-  new_pos = new_pos;
+  reg u64 new_pos = random();
+  #declassify new_pos = new_pos;
 
   () = #unspill(i);
   () = #unspill(res_p);
@@ -647,8 +660,8 @@ fn read_write_block(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram
 }
 
 export
-fn read_write_block_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64[b_sz] ans, reg u64 i, reg ptr u64[b_sz] vals, reg u8 wr)
-    -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64[b_sz], reg u8 {
+fn read_write_block_export(#public reg ptr u64[N] Pos, #secret reg ptr u64[2 * N * K * (2 + b_sz)] oram, #secret reg ptr u64[b_sz] ans, #secret reg u64 i, #secret reg ptr u64[b_sz] vals, #secret reg u8 wr)
+    -> #public reg ptr u64[N], #secret reg ptr u64[2 * N * K * (2 + b_sz)], #secret reg ptr u64[b_sz], reg u8 {
   Pos = Pos; oram = oram; ans = ans; i = i; vals = vals; wr = wr;
   reg u8 overflow;
   Pos, oram, ans, overflow = read_write_block(Pos, oram, ans, i, vals, wr);
@@ -697,10 +710,10 @@ fn multiQuery(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg 
 }
 
 export
-fn multiQuery_export(#public reg ptr u64[N] Pos, #private reg ptr u64[2 * N * K * (2 + b_sz)] oram, #private reg ptr u64 [N_queries] ans, #private reg ptr u64 [N_queries * (1 + 1 + 1)] queries)
-    -> #public reg ptr u64[N], #private reg ptr u64[2 * N * K * (2 + b_sz)], #private reg ptr u64 [N_queries], reg u8 {
+fn multiQuery_export(#public reg ptr u64[N] Pos, #public reg ptr u64[2 * N * K * (2 + b_sz)] oram, #public reg ptr u64 [N_queries] ans, #public reg ptr u64 [N_queries * (1 + 1 + 1)] queries)
+    -> #public reg ptr u64[N], #public reg ptr u64[2 * N * K * (2 + b_sz)], #public reg ptr u64 [N_queries], reg u8 {
   Pos = Pos; oram = oram; ans = ans; queries = queries;
-  reg u8 overflow = 0;
+  reg u8 overflow;
   Pos, oram, ans, overflow = multiQuery(Pos, oram, queries, ans);
   Pos = Pos; oram = oram; ans = ans; overflow = overflow;
   return Pos, oram, ans, overflow;
@@ -755,7 +768,7 @@ export
 fn multiQuery_blocks_export(reg ptr u64[N] Pos, reg ptr u64[2 * N * K * (2 + b_sz)] oram, reg ptr u64 [N_queries * b_sz] ans, reg ptr u64 [N_queries * (1 + 1 + b_sz)] queries)
     -> reg ptr u64[N], reg ptr u64[2 * N * K * (2 + b_sz)], reg ptr u64 [N_queries * b_sz], reg u8 {
   Pos = Pos; oram = oram; queries = queries; ans = ans;
-  reg u8 overflow = 0;
+  reg u8 overflow;
   Pos, oram, ans, overflow = multiQuery_blocks(Pos, oram, queries, ans);
   Pos = Pos; oram = oram; ans = ans; overflow = overflow;
   return Pos, oram, ans, overflow;
